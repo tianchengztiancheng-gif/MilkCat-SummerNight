@@ -72,9 +72,9 @@ async function page(net, o = {}) {
   const p = await ctx.newPage();
   const errs = []; p.on('pageerror', e => errs.push(e.message));
   if (o.wait != null) await p.addInitScript((w) => {
-    try { if (!localStorage.getItem('gal_imgnet')) localStorage.setItem('gal_imgnet', JSON.stringify({ mode: 'auto', wait: w })); } catch (e) {}
+    try { if (!localStorage.getItem('mc:gal_imgnet')) localStorage.setItem('mc:gal_imgnet', JSON.stringify({ mode: 'auto', wait: w })); } catch (e) {}
   }, o.wait);
-  await p.goto('file://' + ROOT + '/index.html');
+  await p.goto('file://' + ROOT + '/index.html?title=0');
   await p.waitForTimeout(400);
   return { ctx, p, hits, errs };
 }

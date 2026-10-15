@@ -64,11 +64,11 @@ async function page(o = {}) {
   await p.addInitScript((o) => {
     if (sessionStorage.getItem('seeded')) return;
     sessionStorage.setItem('seeded', '1');
-    localStorage.setItem('gal_api_config', JSON.stringify({ protocol: 'openai', baseUrl: 'https://main.api', apiKey: 'k1', model: 'main-m', stream: false }));
-    localStorage.setItem('gal_memory_cfg', JSON.stringify(Object.assign({ enabled: true, keepTurns: 2, chunkTurns: 2, via: 'main' }, o.mem || {})));
-    if (o.sub) localStorage.setItem('gal_api2_config', JSON.stringify(o.sub));
+    localStorage.setItem('mc:gal_api_config', JSON.stringify({ protocol: 'openai', baseUrl: 'https://main.api', apiKey: 'k1', model: 'main-m', stream: false }));
+    localStorage.setItem('mc:gal_memory_cfg', JSON.stringify(Object.assign({ enabled: true, keepTurns: 2, chunkTurns: 2, via: 'main' }, o.mem || {})));
+    if (o.sub) localStorage.setItem('mc:gal_api2_config', JSON.stringify(o.sub));
   }, o);
-  await p.goto('file://' + ROOT + '/index.html');
+  await p.goto('file://' + ROOT + '/index.html?title=0');
   await p.waitForTimeout(600);
   await p.setInputFiles('#f-card', path.join(OUT, 'memory-card.json'));
   await p.setInputFiles('#f-preset', path.join(OUT, 'memory-preset.json'));

@@ -64,11 +64,11 @@ await ctx.route('https://fake.api/**', async (route) => {
     body: JSON.stringify({ choices: [{ message: { content }, finish_reason: 'stop' }] }) });
 });
 await p.addInitScript(() => {
-  localStorage.setItem('gal_api_config', JSON.stringify({
+  localStorage.setItem('mc:gal_api_config', JSON.stringify({
     protocol: 'openai', baseUrl: 'https://fake.api', apiKey: 'k', model: 'm', stream: false, maxTokens: 4096 }));
 });
 
-await p.goto('file://' + ROOT + '/index.html');
+await p.goto('file://' + ROOT + '/index.html?title=0');
 await p.waitForTimeout(900);
 await p.setInputFiles('#f-card', path.join(OUT, 'reroll-card.json'));
 await p.waitForTimeout(500);

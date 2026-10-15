@@ -42,11 +42,11 @@ if (!HAVE_REAL_RES) console.log('（未找到真素材表，改用 test/fixtures
 
 const FILES = [
   ...(HAVE_REAL_RES ? REAL_RES : ['test/fixtures/resource.js']),
-  'core/terms.js',
+  'core/ns.js', 'core/terms.js',
   'core/crash.js', 'core/cardres.js', 'core/tokens.js', 'core/vector.js',
   'core/imagegen.js', 'core/snapshot.js', 'core/gallery.js', 'core/cg.js',
   'core/resolver.js', 'core/worldbook.js', 'core/regex.js', 'core/prompt.js', 'core/script.js',
-  'core/phone.js', 'core/memory.js', 'core/milkcat.js', 'core/engine.js', 'core/api.js', 'core/savetree.js', 'core/imgnet.js', 'core/opening.js', 'core/storage.js', 'core/editors.js', 'core/customsprites.js', 'core/packs.js', 'packs/tianqing/data.js', 'packs/tianqing/pack.js', 'app/app.js'
+  'core/phone.js', 'core/memory.js', 'core/milkcat.js', 'core/engine.js', 'core/api.js', 'core/savetree.js', 'core/imgnet.js', 'core/opening.js', 'core/storage.js', 'core/editors.js', 'core/customsprites.js', 'core/packs.js', 'packs/tianqing/data.js', 'packs/tianqing/pack.js', 'app/title.js', 'app/app.js'
 ];
 
 const qa0 = s2 => [...d.querySelectorAll(s2)];
@@ -1419,6 +1419,29 @@ console.log('\n[7j] 自定义立绘 / 回看显示玩家的话 / 评论存档（
   ok('载卡后重新合一次自定义立绘', /CustomSprites\.forget\(\); global\.CustomSprites\.apply\(\)/.test(fs.readFileSync(path.join(ROOT, 'core/engine.js'), 'utf8')));
   ok('回看里每轮显示玩家的话', /res\.modules\[0\]\.said = opt\.said \|\| userText/.test(src) && /histline me/.test(src));
   ok('动态评论存进 phoneSent', /kind: 'cmt', post: post\.id/.test(src));
+}
+
+console.log('\n[7y] 标题画面（天青原版版式）');
+{
+  ok('MCTitle 加载了', !!w.MCTitle && typeof w.MCTitle.show === 'function');
+  ok('四个菜单都在', ['mc-title-new', 'mc-title-continue', 'mc-title-saves', 'mc-title-settings'].every(id => !!d.getElementById(id)));
+  ok('轮播的骨架在', ['mc-open', 'mc-open-track', 'mc-open-viewport', 'mc-open-confirm', 'mc-open-back', 'mc-open-dots'].every(id => !!d.getElementById(id)));
+  ok('角色包有标题主视觉和卡面', !!(w.MilkCatPacks.get('tianqing').title && w.MilkCatPacks.get('tianqing').title.bg && w.MilkCatPacks.get('tianqing').cover));
+  ok('title.css 用容器单位，没有 vw / vh', !/\d(vw|vh|dvh)\b/.test(fs.readFileSync(path.join(ROOT, 'app/title.css'), 'utf8')));
+}
+
+console.log('\n[7z] 存储隔离（和同源的 juus 版）');
+{
+  ok('localStorage 换成了带前缀的包装', w.MCStore && w.MCStore.isolated === true && w.localStorage === w.MCStore.ls);
+  w.localStorage.setItem('gal_iso_probe', '1');
+  ok('写进去的键带 mc: 前缀', w.MCStore.raw.getItem('mc:gal_iso_probe') === '1' && w.MCStore.raw.getItem('gal_iso_probe') === null);
+  w.MCStore.raw.setItem('gal_api_config', '{"baseUrl":"juus"}');
+  ok('看不见 juus 版的键', w.localStorage.getItem('gal_api_config') === null || !/juus/.test(w.localStorage.getItem('gal_api_config')));
+  let seen = []; for (let i = 0; i < w.localStorage.length; i++) seen.push(w.localStorage.key(i));
+  ok('遍历只列自己的键（去掉前缀）', seen.includes('gal_iso_probe') && !seen.some(k => /^mc:/.test(k)));
+  ok('找得到 juus 版的接口设置', w.MCStore.juusFound().includes('gal_api_config'));
+  w.MCStore.raw.removeItem('gal_api_config'); w.localStorage.removeItem('gal_iso_probe');
+  ok('IndexedDB 库名是 milkcat', /MCStore\.DB\) \|\| 'milkcat'/.test(fs.readFileSync(path.join(ROOT, 'core/storage.js'), 'utf8')) && w.MCStore.DB === 'milkcat');
 }
 
 console.log('\n[8] 运行期未捕获错误');

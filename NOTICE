@@ -20,6 +20,9 @@
             三个开局、角色世界书、系统提示词、各手机 App 提示词、默认变量、界面默认值、文生图标签。
           packs/tianqing/pack.js —— 天青的配置，以及超级奶猫新增的两条提示词
             （「多人同台」「手机钩子写法补充」），新增部分已在文件里标明。
+          app/title.css —— 标题画面和开局轮播的样式，移植自 Larimar interface/stage.css
+            （#title-screen / #opening-panel），app/title.js 的轮播逻辑移植自 interface/opening-select.js。
+            这两份按天青作者的授权使用，改动见文件头。
   改动    唯一的改写：格式标签前缀 summernight → MilkCat。人设、世界观、文风提示词原样照搬。
   条款    这些内容的权利归天青作者所有，不随本仓库的 MIT 许可证授出。
           要在别处使用天青的内容，请先联系天青作者。

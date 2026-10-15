@@ -54,7 +54,7 @@
       try {
         for (var i = 0; i < global.localStorage.length; i++) {
           var k = global.localStorage.key(i);
-          if (k && k.indexOf('gal_') === 0 &&
+          if (k && (k.indexOf('gal_') === 0 || k.indexOf('mc_') === 0) &&
               !/key|token|secret/i.test(k)) {          // 不导出密钥
             out.local[k] = global.localStorage.getItem(k);
           }
@@ -66,7 +66,7 @@
       global.setTimeout(finish, 3000);                 // IndexedDB 卡住就别等了
 
       try {
-        var req = global.indexedDB.open('gal');
+        var req = global.indexedDB.open((global.MCStore && global.MCStore.DB) || 'milkcat');
         req.onerror = function () { out.note += '打不开 IndexedDB；'; finish(); };
         req.onsuccess = function () {
           try {

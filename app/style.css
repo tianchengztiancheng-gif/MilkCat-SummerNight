@@ -551,6 +551,10 @@ aside .x{background:none;border:0;color:var(--sub);font-size:20px;cursor:pointer
   color:#e6f4fb;margin:0}
 #boot .boot-brand p{color:#7c9cb2;font-size:11.5px;margin:5px 0 0;line-height:1.6;letter-spacing:.02em}
 
+#boot .boot-totitle{display:block;width:100%;margin:0 0 10px;padding:10px 14px;text-align:left;cursor:pointer;border-radius:8px;
+  border:1px solid rgba(141,212,224,.35);background:rgba(141,212,224,.08);color:#d9f1f7;font-size:14px;letter-spacing:.08em}
+#boot .boot-totitle:hover{background:rgba(141,212,224,.18)}
+#boot .boot-totitle[hidden]{display:none}
 #boot .boot-resume{display:block;width:100%;text-align:left;cursor:pointer;
   padding:11px 14px;border-radius:10px;font:inherit;
   background:linear-gradient(100deg,rgba(96,205,240,.16),rgba(96,205,240,.05));
@@ -979,6 +983,9 @@ html:not(.m-mobile) .m-only{display:none}
 .histturn .tsum .tme{font-style:normal;color:#ffb27a;opacity:1}
 
 /* ---- 角色包（超级奶猫） ---- */
+#boot .mc-juus{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-bottom:14px;padding:10px 12px;border:1px dashed rgba(141,212,224,.45);border-radius:8px;font-size:12.5px;color:#cfe6f0}
+#boot .mc-juus[hidden]{display:none}
+#boot .mc-juus span{flex:1 1 240px}
 #boot .mc-packs{margin-bottom:18px}
 #boot .mc-packs-hd{display:flex;align-items:center;gap:10px;font-size:13px;letter-spacing:.2em;color:#9fc6dc;margin-bottom:10px}
 #boot .mc-packs-hd .warn{letter-spacing:0;color:#ffcf7a}

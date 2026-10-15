@@ -72,11 +72,11 @@ const errs = []; p.on('pageerror', e => errs.push(e.message));
 await p.addInitScript(() => {
   if (sessionStorage.getItem('seeded')) return;
   sessionStorage.setItem('seeded', '1');
-  localStorage.setItem('gal_api_config', JSON.stringify({ protocol: 'openai', baseUrl: 'https://main.api', apiKey: 'k1', model: 'main-m', stream: false }));
-  localStorage.setItem('gal_memory_cfg', JSON.stringify({ enabled: false }));
+  localStorage.setItem('mc:gal_api_config', JSON.stringify({ protocol: 'openai', baseUrl: 'https://main.api', apiKey: 'k1', model: 'main-m', stream: false }));
+  localStorage.setItem('mc:gal_memory_cfg', JSON.stringify({ enabled: false }));
 });
 async function boot() {
-  await p.goto('file://' + ROOT + '/index.html'); await p.waitForTimeout(700);
+  await p.goto('file://' + ROOT + '/index.html?title=0'); await p.waitForTimeout(700);
   await p.setInputFiles('#f-card', path.join(OUT, 'custom-card.json'));
   await p.setInputFiles('#f-preset', path.join(OUT, 'custom-preset.json'));
   await p.waitForTimeout(400);

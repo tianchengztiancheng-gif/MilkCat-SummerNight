@@ -9,6 +9,8 @@
  *   E. 手机里私聊天青：用的是 LINE 提示词，回复进聊天
  *   F. 设置 · 手机提示词：改了生效、能恢复默认
  *   G. 导入酒馆角色卡切到卡；「改回角色包」切回来
+ *   H. 标题画面（天青原版版式）：开始新游戏 → 开局轮播 → 开演；继续 / 存档 / 设置；自定义开场；两个角色时先选角色
+ *   I. 和同一网站下的 juus 版隔开：localStorage 前缀、IndexedDB 库名、「沿用 juus 版的接口设置」
  *
  * 用法：node tools/e2e-milkcat.mjs [要测的目录] [截图输出目录]
  * ============================================================ */
@@ -72,7 +74,7 @@ await ctx.route('**/*', async route => {
 const p = await ctx.newPage();
 const errs = []; p.on('pageerror', e => errs.push(e.message));
 await p.addInitScript(() => { if (!sessionStorage.getItem('s')) { sessionStorage.setItem('s', 1);
-  localStorage.setItem('gal_api_config', JSON.stringify({ protocol: 'openai', baseUrl: 'https://main.api', apiKey: 'k', model: 'm', stream: false })); } });
+  localStorage.setItem('mc:gal_api_config', JSON.stringify({ protocol: 'openai', baseUrl: 'https://main.api', apiKey: 'k', model: 'm', stream: false })); } });
 await p.goto('file://' + ROOT + '/index.html'); await p.waitForTimeout(800);
 const E = (f, a) => p.evaluate(f, a);
 
@@ -183,6 +185,10 @@ console.log('\n[F 设置 · 手机提示词]');
 console.log('\n[G 酒馆角色卡 ↔ 角色包]');
 {
   await E(() => window.__gal.leaveGame()); await p.waitForTimeout(500);
+  ok('退出游戏回到标题画面', await E(() => document.getElementById('mc-title').classList.contains('open')));
+  await p.click('#mc-title-settings'); await p.waitForTimeout(400);
+  ok('标题 → 设置界面：四步引导露出来，左栏有「返回标题画面」', await E(() => !document.getElementById('mc-title').classList.contains('open') &&
+     !document.getElementById('boot-totitle').hidden));
   const card = { spec: 'chara_card_v2', data: { name: '测试卡', first_mes: '『✨ 08:00 · 港区 ✨』|旁白|-|\n「早。」|测试娘|微笑|', extensions: {} } };
   fs.writeFileSync(path.join(OUT, 'mc-card.json'), JSON.stringify(card));
   await E(() => document.querySelector('#boot-steps button[data-step="asset"]').click());
@@ -192,6 +198,115 @@ console.log('\n[G 酒馆角色卡 ↔ 角色包]');
   await p.click('#pack-back'); await p.waitForTimeout(300);
   const s2 = await E(() => ({ src: localStorage.getItem('mc_source'), ops: [...document.querySelectorAll('#opening-sel option')].length, pool: window.__gal.eng.pool.some(e => e.comment === 'GAL格式') }));
   ok('改回角色包：开局和世界书都回来', /pack/.test(s2.src) && s2.ops === 3 && s2.pool, JSON.stringify(s2));
+}
+
+console.log('\n[H 标题画面 + 开局轮播（天青原版版式）]');
+{
+  await p.reload(); await p.waitForTimeout(1200);
+  const t0 = await E(() => ({ open: document.getElementById('mc-title').classList.contains('open'),
+    menu: [...document.querySelectorAll('#mc-title .title-menu-btn')].map(b => b.textContent.trim()),
+    bg: getComputedStyle(document.getElementById('mc-title')).getPropertyValue('--mc-title-bg'),
+    cont: document.getElementById('mc-title-continue').disabled }));
+  ok('一打开就是标题画面：开始新游戏 / 继续游戏 / 存档界面 / 设置界面', t0.open && t0.menu.join() === '开始新游戏,继续游戏,存档界面,设置界面', JSON.stringify(t0.menu));
+  ok('主视觉用天青原版的主页面图', /%E4%B8%BB%E9%A1%B5%E9%9D%A2|主页面/.test(decodeURIComponent(t0.bg)) || /huggingface|wsrv|catbox/.test(t0.bg), t0.bg);
+  ok('有存档时「继续游戏」可点', t0.cont === false);
+  await p.screenshot({ path: `${OUT}/mc-title.png` });
+
+  await p.click('#mc-title-new'); await p.waitForTimeout(900);
+  const c1 = await E(() => ({ open: document.getElementById('mc-open').classList.contains('open'), st: MCTitle._state(),
+    cards: document.querySelectorAll('#mc-open .opening-card').length, dots: document.querySelectorAll('#mc-open .opening-dot').length,
+    cap: document.getElementById('mc-open-caption').textContent, ok: document.getElementById('mc-open-confirm').textContent,
+    roman: [...document.querySelectorAll('#mc-open .opening-card-roman')].map(r => r.textContent),
+    sprite: !!document.querySelector('#mc-open .opening-card.is-selected .opening-card-sprite'),
+    back: document.getElementById('mc-open-back').hidden }));
+  ok('只有一个角色：直接是天青的开局轮播（3 个开局 + 自定义开场）', c1.open && c1.st.mode === 'openings' && c1.cards === 4 && c1.dots === 4 &&
+     c1.st.items.join() === '校门口,MV企划,婚纱拍摄,自定义开场', JSON.stringify(c1.st));
+  ok('卡片：罗马数字、背景 + 立绘、底下副标题', c1.roman.join() === 'I,II,III,+' && c1.sprite && c1.cap === '三月末 · 接天青放学', JSON.stringify(c1));
+  ok('只有一个角色时没有「换角色」', c1.back === true);
+  await p.screenshot({ path: `${OUT}/mc-openings.png` });
+  await p.click('#mc-open-next'); await p.waitForTimeout(600);
+  ok('› 切到下一个开局', await E(() => MCTitle._state().sel) === 1 && /七月午后/.test(await p.textContent('#mc-open-caption')));
+  /* 拖拽：往左拖一张多 → 再下一个 */
+  const box = await p.locator('#mc-open-viewport').boundingBox();
+  await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await p.mouse.down();
+  await p.mouse.move(box.x + box.width / 2 - 200, box.y + box.height / 2, { steps: 8 }); await p.mouse.up(); await p.waitForTimeout(700);
+  ok('左滑切到「婚纱拍摄」', await E(() => MCTitle._state().sel) === 2 && /教堂/.test(await p.textContent('#mc-open-caption')));
+  await p.click('#mc-open-confirm'); await p.waitForTimeout(1500);
+  const g = await E(() => ({ title: document.getElementById('mc-title').classList.contains('open'), open: document.getElementById('mc-open').classList.contains('open'),
+    boot: document.getElementById('boot').classList.contains('gone'), op: window.__gal.eng.history[0] && window.__gal.eng.history[0].content.slice(0, 400) }));
+  ok('开始开局：标题和轮播收起，直接进游戏', !g.title && !g.open && g.boot, JSON.stringify(g).slice(0, 200));
+  ok('演的是「婚纱拍摄」的开场白', /教堂|婚纱/.test(g.op || ''), (g.op || '').slice(0, 80));
+
+  await E(() => window.__gal.leaveGame()); await p.waitForTimeout(600);
+  await p.click('#mc-title-saves'); await p.waitForTimeout(500);
+  ok('存档界面盖在标题上面', await E(() => { const m = document.getElementById('save-modal'); const r = m.getBoundingClientRect();
+    return !m.hidden && document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) && m.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)); }));
+  await E(() => document.getElementById('sv-close').click());
+  await p.click('#mc-title-continue'); await p.waitForTimeout(1200);
+  ok('继续游戏：读最近的进度', await E(() => document.getElementById('boot').classList.contains('gone') && !document.getElementById('mc-title').classList.contains('open') &&
+     /婚纱/.test(String(window.__gal.eng.history[0] && window.__gal.eng.history[0].content))));
+  await E(() => window.__gal.leaveGame()); await p.waitForTimeout(500);
+
+  /* 自定义开场：去开场那一步，自定义模式 */
+  await p.click('#mc-title-new'); await p.waitForTimeout(800);
+  await E(() => document.querySelector('#mc-open .opening-dot[data-index="3"]').click()); await p.waitForTimeout(600);
+  ok('最后一张「自定义开场」按钮写「去设定」', /去 设 定/.test(await p.textContent('#mc-open-confirm')));
+  await p.click('#mc-open-confirm'); await p.waitForTimeout(500);
+  ok('自定义开场 → 引导的开场一步，自定义模式', await E(() => !document.getElementById('mc-title').classList.contains('open') &&
+     document.querySelector('#boot .boot-pane[data-pane="go"]').classList.contains('on') && !document.getElementById('op-custom').hidden));
+  await p.click('#boot-totitle'); await p.waitForTimeout(400);
+  ok('「返回标题画面」', await E(() => document.getElementById('mc-title').classList.contains('open')));
+
+  /* 第二个角色（测试用的假包）：先选角色，再选她的开局 */
+  await E(() => {
+    const T = MilkCatPacks.get('tianqing');
+    MilkCatPacks.register({ id: 'test2', name: '测试娘', main: '测试娘', terms: { user: '前辈' }, tagline: '测试用',
+      characters: { '测试娘': { expressions: { 微笑: T.characters['天青'].expressions['微笑'] }, defaultExpr: '微笑', color: '#f9a' } },
+      scenes: { 街区: T.scenes['街区'] }, cg: {}, stickers: {}, worldbook: [], prompts: [], phonePrompts: {}, variables: { data: {}, meta: {} },
+      openings: [{ id: 'a', title: '放学路上', subtitle: '傍晚 · 街角', coverBgId: '街区', coverExpr: '微笑', raw: '<MilkCat><MilkCat_maintext><背景|街区|街角><测试娘|微笑|前辈！></MilkCat_maintext></MilkCat>' }] });
+  });
+  await p.click('#mc-title-new'); await p.waitForTimeout(800);
+  const k = await E(() => ({ st: MCTitle._state(), ok: document.getElementById('mc-open-confirm').textContent, kick: document.getElementById('mc-open-kicker').textContent }));
+  ok('两个角色：先选角色（天青 / 测试娘）', k.st.mode === 'chars' && k.st.items.join() === '天青,测试娘' && /选 她/.test(k.ok) && /角色/.test(k.kick), JSON.stringify(k));
+  await p.screenshot({ path: `${OUT}/mc-chars.png` });
+  await p.click('#mc-open-next'); await p.waitForTimeout(500);
+  await p.click('#mc-open-confirm'); await p.waitForTimeout(700);
+  const k2 = await E(() => ({ st: MCTitle._state(), back: document.getElementById('mc-open-back').hidden, main: MilkCatPacks.choice().main, user: Terms.user }));
+  ok('选了测试娘：换成她的包，轮播里是她的开局 + 自定义开场', k2.st.mode === 'openings' && k2.st.pack === 'test2' && k2.st.items.join() === '放学路上,自定义开场' &&
+     k2.main === 'test2' && k2.user === '前辈', JSON.stringify(k2));
+  ok('有「换角色」', k2.back === false);
+  await p.click('#mc-open-back'); await p.waitForTimeout(500);
+  await E(() => document.querySelector('#mc-open .opening-dot[data-index="0"]').click()); await p.waitForTimeout(400);
+  await p.click('#mc-open-confirm'); await p.waitForTimeout(600);
+  ok('换回天青', await E(() => MilkCatPacks.choice().main === 'tianqing' && MCTitle._state().items.length === 4 && Terms.user === '制作人'));
+  await E(() => MCTitle.closeCarousel());
+
+  /* 接口没填：开始新游戏 → 去设置的接口那一步 */
+  await E(() => { localStorage.removeItem('gal_api_config'); });
+  await p.click('#mc-title-new'); await p.waitForTimeout(500);
+  ok('接口没填：不开轮播，去设置的「接口」一步', await E(() => !document.getElementById('mc-open').classList.contains('open') &&
+     !document.getElementById('mc-title').classList.contains('open') && document.querySelector('#boot .boot-pane[data-pane="api"]').classList.contains('on')));
+}
+
+console.log('\n[I 和同一网站下的 juus 版隔开]');
+{
+  const r = await E(() => {
+    const raw = MCStore.raw;
+    raw.setItem('gal_api_config', JSON.stringify({ protocol: 'openai', baseUrl: 'https://juus.api', apiKey: 'jk', model: 'jm' }));
+    raw.setItem('gal_persona', JSON.stringify({ name: 'juus 的人设' }));
+    return { iso: MCStore.isolated, own: localStorage.getItem('gal_api_config'), persona: localStorage.getItem('gal_persona'),
+      keys: Object.keys(raw).filter(k => /^mc:/.test(k)).length, plain: localStorage.length };
+  });
+  ok('localStorage 带 mc: 前缀，看不见 juus 的键', r.iso && r.own === null && !/juus/.test(r.persona || '') && r.keys > 3 && r.plain === r.keys, JSON.stringify(r));
+  await p.reload(); await p.waitForTimeout(1000);
+  await E(() => MCTitle.hide());
+  await E(() => document.querySelector('#boot-steps button[data-step="api"]').click());
+  ok('接口没填、juus 版有：显示「沿用 juus 版的接口设置」', await E(() => !document.getElementById('juus-import').hidden));
+  await p.click('#btn-juus-import'); await p.waitForTimeout(300);
+  ok('点了才复制过来', await E(() => document.getElementById('cfg-base').value === 'https://juus.api' && JSON.parse(localStorage.getItem('gal_api_config')).model === 'jm' &&
+     document.getElementById('juus-import').hidden));
+  ok('IndexedDB 用自己的库 milkcat', await E(async () => (await indexedDB.databases()).map(d => d.name).includes('milkcat')));
+  await E(() => { MCStore.raw.removeItem('gal_api_config'); MCStore.raw.removeItem('gal_persona'); });
 }
 
 ok('没有报错', errs.length === 0, errs.join(' | '));

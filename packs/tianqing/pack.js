@@ -45,6 +45,13 @@
     source: D.source,
     main: '天青',                                   // 这个包的主角（虚拟卡的 {{char}}）
     terms: { user: '制作人', crowd: '大家', world: '' },
+    /* 标题画面（天青原版的主界面图）和选角色时的卡面 */
+    title: {
+      bg: 'https://huggingface.co/think-denim-frisk/Larimar/resolve/main/system/' + encodeURIComponent('主页面.png'),
+      sub: 'SummerNight Plus'
+    },
+    tagline: '偶像 · 事务所 · 直播',
+    cover: { bg: '事务所办公室', expr: '微笑' },
     characters: {
       '天青': {
         expressions: D.expressions,                  // 75 种表情，扁平一套（演出服 / 婚纱带前缀）

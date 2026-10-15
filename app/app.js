@@ -2109,7 +2109,7 @@
         return '<button data-sec="' + x.k + '"' + (i === 0 ? ' class="on"' : '') + '>' +
           '<b>' + x.t + '</b><span>' + x.d + '</span></button>';
       }).join('') +
-      '<div class="kt-ver">超级奶猫 · v0.1</div></nav>' +
+      '<div class="kt-ver">超级奶猫 · v0.2</div></nav>' +
       '<section class="kt-main">' +
       '<header class="kt-head"><h2 id="kt-title"></h2><p id="kt-sub"></p>' +
       '<div class="kt-acts" id="kt-acts"></div></header>' +
@@ -4778,6 +4778,7 @@
 
   /** 第 1 步顶上的角色包卡片 */
   function renderPacks() {
+    syncTitleBtn();
     var box = $('pack-box'); if (!box || !window.MilkCatPacks) return;
     var c = MilkCatPacks.choice(), on = packMode();
     var R = window.RESOURCE || {};
@@ -5025,6 +5026,7 @@
      开始 / 继续
      ============================================================ */
   function enterGame() {
+    if (window.MCTitle) { MCTitle.closeCarousel(); MCTitle.hide(); }
     $('boot').classList.add('gone');
     ['dialogue', 'inputbar', 'toolbar'].forEach(function (id) { $(id).hidden = false; });
   }
@@ -5048,6 +5050,7 @@
     stageNow = []; lastBgUrl = null;
     $('boot').classList.remove('gone');
     await renderRuns();
+    showTitle();                 // 角色包模式回到标题画面（天青原版的开始界面）
   }
 
   /** 开场引导左栏的周目列表 */
@@ -5912,17 +5915,143 @@
     stageFor: stageFor, phoneBack: phoneBack
   };
 
+  /* ============================================================
+     标题画面 + 选角色 / 选开局（app/title.js 管界面，这里接玩法）
+     角色包模式一打开就是标题画面（天青原版的开始界面）；酒馆卡模式没有，直接是四步引导。
+     开始新游戏 → （有多个角色时先选角色）→ 开局轮播（包里的开局 + 自定义开场）→ 直接开演
+     设置界面   → 原来的四步引导（接口、插画、预设……），左栏有「返回标题画面」
+     URL 带 ?title=0 时不显示（自动化测试用）
+     ============================================================ */
+  var TITLE_OFF = /[?&]title=0\b/.test(window.location.search || '');
+  function titleOn() { return !TITLE_OFF && !!window.MCTitle && packMode(); }
+  function packSceneUrl(pk, loc) {
+    var sc = pk && pk.scenes && pk.scenes[loc];
+    if (!sc) return '';
+    var u = sc['白日'] || sc['黄昏'] || sc['夜晚'] || sc[Object.keys(sc)[0]] || '';
+    return u ? ImgNet.srcFor(u) : '';
+  }
+  function packSpriteUrl(pk, who, expr) {
+    var ch = pk && pk.characters && pk.characters[who || pk.main];
+    if (!ch) return '';
+    var ex = ch.expressions || {};
+    var u = ex[expr] || ex[ch.defaultExpr] || ex[Object.keys(ex)[0]];
+    if (Array.isArray(u)) u = u[0];
+    return u ? ImgNet.srcFor(u) : '';
+  }
+  function titleCharacters() {
+    return MilkCatPacks.list().map(function (pk) {
+      var cv = pk.cover || {}, ops = pk.openings || [];
+      var first = ops[0] || {};
+      return {
+        id: pk.id, name: pk.name,
+        sub: pk.tagline || (ops.length + ' 个开局'),
+        cover: packSceneUrl(pk, cv.bg || first.coverBgId),
+        sprite: packSpriteUrl(pk, pk.main, cv.expr || first.coverExpr)
+      };
+    });
+  }
+  function titleOpenings(id) {
+    var pk = MilkCatPacks.get(id) || MilkCatPacks.active();
+    if (!pk) return [];
+    var list = MilkCatPacks.openings(pk).map(function (o, i) {
+      return { key: String(i), title: o.n, sub: o.sub, cover: packSceneUrl(pk, o.cover.bg), sprite: packSpriteUrl(pk, pk.main, o.cover.expr) };
+    });
+    var locs = Object.keys(pk.scenes || {});
+    list.push({ key: 'custom', custom: true, title: '自定义开场',
+      sub: '自己定时间、地点、在场的人和要发生的事',
+      cover: packSceneUrl(pk, locs.indexOf('街区') >= 0 ? '街区' : locs[0]) });
+    return list;
+  }
+  function apiReadyForTitle() { return bootDone('api') ? true : '先填好接口（地址、密钥、模型），才能开始。'; }
+  async function titleHasProgress() {
+    var list = await renderRuns();
+    return !!(list && list.length);
+  }
+  function showTitle() {
+    if (!titleOn()) return false;
+    MCTitle.show();
+    return true;
+  }
+  if (window.MCTitle) {
+    MCTitle.init({
+      look: function () {
+        var pk = MilkCatPacks.active() || {};
+        var t = pk.title || {};
+        return { bg: t.bg ? ImgNet.srcFor(t.bg) : packSceneUrl(pk, (pk.cover || {}).bg), name: '超级奶猫', sub: t.sub || '' };
+      },
+      characters: titleCharacters,
+      currentPack: function () { return MilkCatPacks.choice().main; },
+      openings: titleOpenings,
+      pickCharacter: function (id) {
+        var cc = MilkCatPacks.choice();
+        if (cc.main === id) return;
+        usePacks({ main: id, extra: cc.extra.filter(function (x) { return x !== id; }) });
+        noteAssets();
+        MCTitle.refresh();
+      },
+      canStart: apiReadyForTitle,
+      notReady: function (why) {
+        toast(why, 'warn', 4000);
+        MCTitle.hide();
+        gotoBoot(BOOT_STEPS.map(function (s) { return s.k; }).indexOf('api'));
+      },
+      start: function (key) {
+        if (key === 'custom') {
+          MCTitle.hide();
+          setOpMode('custom');
+          gotoBoot(BOOT_STEPS.length - 1);
+          return;
+        }
+        setOpMode('card');
+        $('opening-sel').value = key;
+        $('btn-start').onclick();
+      },
+      hasProgress: titleHasProgress,
+      continue: async function () {
+        await renderRuns();
+        var b = $('btn-continue');
+        if (b && !b.hidden) b.onclick.call(b);
+        else toast('暂无进度可继续', 'warn', 2500);
+      },
+      saves: function () { openSaves(); },
+      settings: function () { MCTitle.hide(); renderBoot(); }
+    });
+  }
+  if ($('boot-totitle')) $('boot-totitle').onclick = function () { showTitle(); };
+  function syncTitleBtn() { if ($('boot-totitle')) $('boot-totitle').hidden = !titleOn(); }
+
+  /* 存储和同一个 github.io 下的 juus 版是隔开的（core/ns.js）。那边填过接口的话，给一个「沿用」按钮，
+     玩家自己点了才复制（键 / 地址 / 模型 / 副 API / 文生图 / 图片网络），不点就各管各的。 */
+  function renderJuusImport() {
+    var box = $('juus-import'); if (!box || !window.MCStore || !MCStore.isolated) return;
+    var found = MCStore.juusFound();
+    box.hidden = !found.length || !!String(GalAPI.loadConfig().apiKey || '').trim();
+  }
+  if ($('btn-juus-import')) $('btn-juus-import').onclick = function () {
+    var done = MCStore.importJuus();
+    loadCfgToForm(); loadSubToForm(); renderBootArt();
+    if (typeof renderNetBoxes === 'function') renderNetBoxes();
+    $('juus-import').hidden = true;
+    var n = $('test-note');
+    if (n) { n.className = 'note ok'; n.textContent = '已沿用 juus 版的设置（' + done.length + ' 项）。点「测试连接」确认一下。'; }
+  };
+
   /* 恢复上次的素材与配置 */
   onLayoutChange();           // 设备选择按钮的高亮、输入框提示语
   loadCfgToForm();
   loadSubToForm();
+  renderJuusImport();
   bindOpc();
   loadUserRegex();
-  /* 先装角色包（不用等存储），存过酒馆卡而且上次选的是卡，再换成卡 */
+  /* 先装角色包（不用等存储），存过酒馆卡而且上次选的是卡，再换成卡。
+     usePacks() 会把 mc_source 写成 pack，所以上次选的是什么要先记下来 */
+  var lastSource = GalStore.local('mc_source');
   usePacks();
+  if (lastSource !== 'card') showTitle();
+  syncTitleBtn();
   Promise.all([GalStore.getCard(), GalStore.getPreset(), GalStore.loadSlot('auto')])
     .then(function (r) {
-      if (r[0] && r[0].json && GalStore.local('mc_source') === 'card') {
+      if (r[0] && r[0].json && lastSource === 'card') {
         useCard(r[0].json);
         $('f-card').parentNode.classList.add('ok');
       }
@@ -5930,8 +6059,12 @@
         eng.loadPreset(r[1].json); loaded.preset = true; presetName = r[1].name || '';
         $('f-preset').parentNode.classList.add('ok');
       }
+      if (lastSource === 'card' && !loaded.pack) { if (window.MCTitle) MCTitle.hide(); }
+      else if (lastSource === 'card') showTitle();     // 上次选的卡已经没了：回到角色包
+      syncTitleBtn();
       noteAssets();
       renderRuns();      // 列出全部周目，顺便决定「继续上次」露不露
+      if (window.MCTitle && MCTitle.isOpen()) MCTitle.refresh();
     })
     .catch(function () { noteAssets(); });
 })();

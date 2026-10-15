@@ -7,7 +7,7 @@
 (function (global) {
   'use strict';
 
-  var DB = 'gal_engine', VER = 1, STORE = 'kv';
+  var DB = (global.MCStore && global.MCStore.DB) || 'milkcat', VER = 1, STORE = 'kv';
   var dbp = null;
   var mode = 'idb';          // idb | local | memory
   var mem = {};              // 最后的退路，刷新即失
