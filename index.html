@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1a26">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>超级奶猫</title>
+<!-- 设备模式（电脑 / 手机竖屏 / 手机横屏）要在第一帧之前定下来，不然手机上会先闪一下电脑版。
+     逻辑和 app.js 里的 applyDeviceClasses() 一致：localStorage 里选过就用选的，没选过按设备自动判断；横竖屏同理（gal_orient） -->
+<script>
+(function () {
+  try {
+    var h = document.documentElement, pref = localStorage.getItem('gal_device') || 'auto';
+    var auto = (matchMedia('(pointer:coarse)').matches &&
+                Math.min(screen.width, screen.height) <= 820) ? 'mobile' : 'pc';
+    var dev = pref === 'pc' || pref === 'mobile' ? pref : auto;
+    var phys = matchMedia('(orientation: portrait)').matches;
+    var o = localStorage.getItem('gal_orient');
+    var port = o === 'port' ? true : o === 'land' ? false : phys;
+    h.classList.add(dev === 'mobile' ? 'm-mobile' : 'm-pc');
+    if (dev === 'mobile') h.classList.add(port ? 'm-port' : 'm-land');
+    /* 手动选的方向和手机拿的方向不一样：整页转 90°（见 app.js 的 applyDeviceClasses） */
+    if (dev === 'mobile' && port !== phys) {
+      h.classList.add('m-rot', port ? 'm-rot-ccw' : 'm-rot-cw');
+      h.style.setProperty('--rw', innerHeight + 'px');
+      h.style.setProperty('--rh', innerWidth + 'px');
+    }
+    if (localStorage.getItem('gal_tb_hidden') === '1') h.classList.add('tb-hidden');
+  } catch (e) {}
+})();
+</script>
+<!-- ?v= 是防缓存：GitHub Pages 会缓存 10 分钟，更新时新旧文件混用会直接报错。每次发版改这个号 -->
+<link rel="stylesheet" href="app/style.css?v=mc0.1">
+<!-- 顺序有意义：inner 打底 → 卡自带的皮（可选，会盖住 inner）→ phone.css 竖屏重排永远最后 -->
+<link rel="stylesheet" href="app/phone-inner.css?v=mc0.1">
+<link rel="stylesheet" href="app/phone.css?v=mc0.1">
+<link rel="stylesheet" href="app/editor-theme.css?v=mc0.1">
+<!-- 手机版式永远最后：只在 html.m-mobile 下生效，电脑模式一条都不碰 -->
+<link rel="stylesheet" href="app/mobile.css?v=mc0.1">
+</head>
+<body>
+
+<div id="stage">
+  <div class="bglayer" id="bgA"></div>
+  <div class="bglayer" id="bgB"></div>
+  <div id="sprites"></div>
+
+  <!-- CG 层：文生图出的图铺在这里。压在立绘之上、对话框之下。
+       素材来源不是 CG 素材表，而是这一轮现生成的图（core/cg.js）。 -->
+  <div id="cg" hidden>
+    <div id="cg-blur"></div>
+    <img id="cg-img" alt="">
+    <div id="cg-cap" hidden></div>
+    <div id="cg-acts">
+      <button id="cg-redraw" title="重画这一张">♻</button>
+      <button id="cg-hide" title="收起（点舞台右上角 ▣ 可以叫回来）">×</button>
+    </div>
+  </div>
+
+  <!-- 出图进度。NAI 一张要十几秒，不能让玩家干等，所以先演剧情，图后到 -->
+  <div id="cg-busy" hidden><span class="dot"></span><span id="cg-busy-t">正在出图…</span>
+    <button id="cg-busy-x" title="取消这一轮的出图">停</button></div>
+
+  <div id="envbar" hidden></div>
+
+  <div id="dialogue" hidden>
+    <div id="dlg-body">
+      <div id="speaker">旁白</div>
+      <div id="text"></div>
+    </div>
+    <div id="choices" hidden></div>
+    <div id="hint">▼ 点击继续</div>
+    <div id="nav">
+      <button id="nav-first" title="回到开头">⏮</button>
+      <button id="nav-prev" title="上一句（←）">‹</button>
+      <span id="progress"></span>
+      <button id="nav-next" title="下一句（→）">›</button>
+      <button id="nav-last" title="跳到最新">⏭</button>
+    </div>
+  </div>
+
+  <div id="inputbar" hidden>
+    <textarea id="usertext" rows="1" placeholder="你的行动或台词…（Enter 发送，Shift+Enter 换行）"></textarea>
+    <!-- 对回复不满意：重roll（同一句话重新生成）/ 撤回（改了再发）/ 在几版之间切换 -->
+    <div class="turn-tools">
+      <span id="turn-ver" hidden title="这一轮重roll 过的几个版本，来回切不花钱">
+        <button type="button" id="ver-prev" aria-label="上一版">‹</button><b id="ver-n">1/1</b><button type="button" id="ver-next" aria-label="下一版">›</button>
+      </span>
+      <button type="button" id="btn-undo" disabled title="撤回最后一轮：那句话放回输入框，改完再发">↶<span>撤回</span></button>
+      <button type="button" id="btn-reroll" disabled title="对这一轮回复不满意？用同一句话重新生成">⟳<span>重roll</span></button>
+    </div>
+    <button id="send">发送</button>
+  </div>
+
+  <div id="toolbar" hidden>
+    <!-- 整排按钮包在 tb-items 里：最右边的 ‹ › 把手一按，整排滑回右边藏起来 -->
+    <div id="tb-items" class="tb-items">
+    <button id="btn-orient" class="m-only" title="切换横竖屏">横</button>
+    <button id="btn-exit" title="保存并退出到开场（换个开局，或读别的存档）">⏻</button>
+    <button id="btn-cgmode" title="CG 常驻：让 CG 盖住立绘，一直铺着推剧情">▣</button>
+    <button id="btn-cg" title="CG / 相册">✿<i id="cg-dot" hidden></i></button>
+    <button id="btn-skin" title="换装（在场角色的服装）">◈</button>
+    <button id="btn-saves" title="存档 / 读档（每轮自动存，读旧的接着玩会长出分支）">▤</button>
+    <button id="btn-phone" title="打开手机（剧情、状态、存档、外观、调试都在里面）">▢<i id="phone-dot" hidden></i></button>
+    </div>
+    <button id="btn-tbhide" title="收起工具栏" aria-expanded="true" aria-controls="tb-items"><i id="tb-dot" hidden></i></button>
+  </div>
+
+  <div id="skin-panel" hidden>
+    <header>换 装<button class="x" id="skin-close">×</button></header>
+    <div id="skin-body"></div>
+  </div>
+
+  <div id="cg-panel" hidden>
+    <header>相 册<span id="cg-stat"></span><button class="x" id="cg-close">×</button></header>
+    <div id="cg-now"></div>
+    <div id="cg-body"></div>
+  </div>
+
+  <div id="tune" hidden>
+    <div class="tune-dev">显示模式
+      <span class="seg"><button type="button" data-dev="auto">自动</button><button type="button" data-dev="pc">电脑</button><button type="button" data-dev="mobile">手机</button></span>
+    </div>
+    <div class="tune-dev m-only">横竖屏
+      <span class="seg"><button type="button" data-orient="auto">跟随手机</button><button type="button" data-orient="port">竖屏</button><button type="button" data-orient="land">横屏</button></span>
+    </div>
+    <hr>
+    <label>立绘大小 <span class="v" id="v-h">78%</span>
+      <input type="range" id="t-h" min="45" max="130" step="1" value="78"></label>
+    <label>垂直位置 <span class="v" id="v-y">0%</span>
+      <input type="range" id="t-y" min="-25" max="25" step="1" value="0"></label>
+    <hr>
+    <label class="chk2"><input type="checkbox" id="t-fx" checked> 立绘出场/换表情随机特效</label>
+    <!-- 默认关：卡里的换装图挂在第三方图床上，死链不少，随机抽经常抽到裂图，
+         而且玩家默认期待看到的就是原皮。 -->
+    <label class="chk2"><input type="checkbox" id="t-rndskin"> 只有默认立绘的角色随机换皮肤（默认用原皮）</label>
+    <label class="chk2"><input type="checkbox" id="t-auto" checked> 对话框按正文高度收缩</label>
+    <label>对话框模糊 <span class="v" id="v-bl">14px</span>
+      <input type="range" id="t-bl" min="0" max="24" step="1" value="14"></label>
+    <label>对话框位置 <span class="v" id="v-py">0%</span>
+      <input type="range" id="t-py" min="0" max="45" step="1" value="0"></label>
+    <label>对话框整体 <span class="v" id="v-o">100%</span>
+      <input type="range" id="t-o" min="20" max="100" step="1" value="100"></label>
+    <label>对话框底色 <span class="v" id="v-bg">52%</span>
+      <input type="range" id="t-bg" min="0" max="100" step="1" value="52"></label>
+    <label>对话框边框 <span class="v" id="v-bd">16%</span>
+      <input type="range" id="t-bd" min="0" max="100" step="1" value="16"></label>
+    <label>同台上限 <span class="v" id="v-ms">4</span>
+      <input type="range" id="t-ms" min="1" max="6" step="1" value="4"></label>
+    <hr>
+    <label>开局好感度 <span class="v" id="v-fav">80</span>
+      <input type="range" id="t-fav" min="0" max="200" step="10" value="80"></label>
+    <hr>
+    <label class="chk2"><input type="checkbox" id="t-keepall"> 动态/热点只累积（不替换旧的）</label>
+    <label>动态保留条数 <span class="v" id="v-lp">20</span>
+      <input type="range" id="t-lp" min="5" max="80" step="5" value="20"></label>
+    <label>热点保留条数 <span class="v" id="v-lt">20</span>
+      <input type="range" id="t-lt" min="5" max="80" step="5" value="20"></label>
+    <button id="t-reset">恢复默认</button>
+  </div>
+
+  <!-- 存读档（存档树）。版式参考 KaiTuoYiShi 的存档树控制台 -->
+  <div id="save-modal" hidden>
+    <div class="sv-shell" role="dialog" aria-label="存档">
+      <header class="sv-hd">
+        <div><div class="sv-kicker">SAVE TREE</div><h2>存 档</h2></div>
+        <span class="sv-cur" id="sv-cur"></span>
+        <button type="button" class="x" id="sv-close" aria-label="关闭">×</button>
+      </header>
+      <div class="sv-body">
+        <!-- 不能用 <aside>：style.css 里有条裸选择器 aside{position:absolute;…}，见交接文档「踩过的坑」 -->
+        <div class="sv-side">
+          <div class="sv-newsave">
+            <input type="text" id="save-name" placeholder="存档名（留空用地点 + 时间）">
+            <button type="button" class="sv-btn primary" id="do-save">保存当前进度</button>
+          </div>
+          <div class="sv-io">
+            <button type="button" class="sv-btn" id="sv-imp">导入存档</button>
+            <button type="button" class="sv-btn" id="sv-exp">导出全部</button>
+          </div>
+          <label class="sv-chk"><input type="checkbox" id="sv-img"> 导出时连 CG 图一起（文件会很大）</label>
+          <input type="file" id="sv-file" accept=".json,application/json" hidden>
+          <div class="sv-metrics" id="sv-metrics"></div>
+          <div class="sv-rules">
+            <b>怎么用</b>
+            <p>每一轮结束自动存一个节点，每个开局保留最近 8 个；手动存的不限、不会被清掉。</p>
+            <p>读一个旧节点接着玩，会从那里长出新分支，原来那条线还在。</p>
+            <p>只是不满意这一轮？不用读档，输入框旁边的 <b>⟳ 重roll</b> 就行。</p>
+          </div>
+        </div>
+        <main class="sv-main">
+          <div class="sv-note" id="sv-note">存档只在这个浏览器里。清缓存、换设备都会没，本地打开的文件和网址也各存各的 —— 玩得久了记得导一份出来。</div>
+          <div class="sv-tabs" id="sv-tabs"></div>
+          <div class="sv-trees" id="sv-trees"></div>
+          <div id="slotlist"></div>
+        </main>
+      </div>
+    </div>
+  </div>
+
+  <div id="spinner" hidden>
+    <span class="sp"></span><span id="spin-t">生成中</span><span class="el" id="elapsed"></span>
+    <button id="btn-abort">中断</button>
+  </div>
+</div>
+
+<!-- ===== 调试面板 ===== -->
+
+<!-- ===== 小手机 ===== -->
+<div id="phone-overlay" class="on" hidden>
+  <div class="ph-frame">
+    <div class="ph-rim"></div>
+    <div class="ph-screen" id="jup-root">
+      <div class="ph-island"></div>
+      <!-- 手机模式专用：顶上的返回 / 收起。底部圆键在全面屏上会被系统手势条挡住 -->
+      <button type="button" class="ph-m-btn" id="ph-m-back" aria-label="返回">‹ 返回</button>
+      <button type="button" class="ph-m-btn" id="ph-m-close" aria-label="收起手机">✕</button>
+      <div class="ph-status"><span id="ph-time">9:41</span>
+        <span class="r">▮▮▮<b id="ph-batt"></b></span></div>
+      <div class="ph-layer ph-home on" data-app="home">
+        <div class="ph-clock"><div class="t" id="ph-bigtime">9:41</div>
+          <div class="d" id="ph-date"></div>
+          <div class="ph-widget" id="ph-widget"></div></div>
+        <div class="ph-grid" id="ph-grid"></div>
+      </div>
+    </div>
+    <button class="ph-homebar" id="ph-home-btn" title="回到主屏" aria-label="回到主屏">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
+        stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V20h13V9.5"/>
+        <path d="M9.8 20v-5.5h4.4V20"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- ===== 全部剧情 ===== -->
+
+<!-- ===== 状态面板 ===== -->
+
+<!-- ===== 存读档 ===== -->
+
+<!-- ===== 开场引导 =====
+     版式借鉴：天青的标题画面（满幅背景 + 左侧竖排菜单）
+             开拓轶事的新游戏向导（步骤导轨 + STEP 编号 + 进度条）
+     配色是我们自己的碧蓝。背景全是 CSS 画的，不依赖任何图片，离线也好看。 -->
+<div id="boot" class="kt">
+  <div class="boot-bg" aria-hidden="true">
+    <span class="w w1"></span><span class="w w2"></span><span class="w w3"></span>
+    <span class="grid"></span>
+  </div>
+
+  <div class="boot-shell">
+    <!-- 用 div 不用 aside：style.css 里有一条裸元素选择器
+         aside{position:absolute;right:0;width:440px}（老侧栏留下的），
+         用 <aside> 会被它拽出网格贴到右边去。 -->
+    <div class="boot-rail">
+      <div class="boot-brand">
+        <div class="mark" aria-hidden="true">
+          <svg viewBox="0 0 40 40" width="34" height="34" fill="none"
+               stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
+            <path d="M20 4 32 12v16L20 36 8 28V12z"/>
+            <path d="M20 12v16M13 16v8M27 16v8" stroke-width="1.2" opacity=".55"/>
+          </svg>
+        </div>
+        <div class="txt">
+          <h1>超级奶猫</h1>
+          <p>多人同台的角色 galgame · 不依赖酒馆</p>
+        </div>
+      </div>
+
+      <!-- 设备：手机端有单独一套版式（app/mobile.css）。默认自动判断，这里可以手动改 -->
+      <div class="boot-device" role="group" aria-label="显示模式">
+        <span class="lbl">显示模式</span>
+        <div class="seg">
+          <button type="button" data-dev="auto">自动</button>
+          <button type="button" data-dev="pc">💻 电脑</button>
+          <button type="button" data-dev="mobile">📱 手机</button>
+        </div>
+        <!-- 手机才有：手动定横竖屏。手机转不过来（方向锁 / 浏览器不转）时页面自己转 90° -->
+        <div class="seg m-only orient-seg" title="手机转不过来也能横屏：页面自己转，把手机横着拿">
+          <button type="button" data-orient="auto">跟随手机</button>
+          <button type="button" data-orient="port">竖屏</button>
+          <button type="button" data-orient="land">横屏</button>
+        </div>
+        <span class="hint" id="dev-auto"></span>
+      </div>
+
+      <button type="button" class="boot-resume" id="btn-continue" hidden>
+        <b>继续上次</b><span id="resume-meta">读取自动存档</span>
+      </button>
+
+      <!-- 周目列表：每个开局各有自己的自动存档，可以来回切。
+           玩到一半点右上角 ⏻ 退出会存档并回到这里。 -->
+      <div class="boot-runs" id="boot-runs" hidden>
+        <div class="boot-runs-hd">全部存档</div>
+        <div class="boot-runs-body" id="boot-runs-body"></div>
+      </div>
+
+      <nav class="boot-steps" id="boot-steps">
+        <button type="button" data-step="asset">
+          <i class="dot"></i><b>角色</b><span>角色包与预设</span></button>
+        <button type="button" data-step="api">
+          <i class="dot"></i><b>接口</b><span>地址、密钥与模型</span></button>
+        <button type="button" data-step="art">
+          <i class="dot"></i><b>插画</b><span>可选 · NovelAI 出图</span></button>
+        <button type="button" data-step="go">
+          <i class="dot"></i><b>开场</b><span>称呼与开局</span></button>
+      </nav>
+
+      <div class="boot-foot">
+        <span>超级奶猫 · v0.1</span>
+        <span class="dim">所有文件只存在你自己的浏览器里</span>
+      </div>
+    </div>
+
+    <section class="boot-main">
+      <header class="boot-head">
+        <div class="kicker"><span id="boot-kicker">STEP 01 / ASSET</span></div>
+        <h2 id="boot-title">素 材</h2>
+        <p id="boot-sub">选角色包。预设可选，文件只存在本机浏览器，不会上传。</p>
+        <div class="boot-bar"><i id="boot-bar-fill"></i></div>
+      </header>
+
+      <div class="boot-body">
+        <!-- ① 素材 -->
+        <div class="boot-pane on" data-pane="asset">
+          <!-- 角色包（超级奶猫）：内置的角色，选了就能玩。由 app.js「角色包」一节画 -->
+          <div class="mc-packs" id="pack-box"></div>
+          <div class="files">
+            <label class="file">预设 JSON（可选）<input type="file" id="f-preset" accept=".json" hidden></label>
+            <label class="file">附加世界书<input type="file" id="f-wi" accept=".json" hidden></label>
+            <label class="file" title="酒馆「扩展 · 正则」里导出的 json，可多选。预设里自带的正则会自动读取，不用再导">正则（可选）<input type="file" id="f-regex" accept=".json" multiple hidden></label>
+            <label class="file" title="不用角色包，改用一张酒馆角色卡（高级）">导入酒馆角色卡<input type="file" id="f-card" accept=".json" hidden></label>
+          </div>
+          <div class="note" id="assets-note">尚未载入。文件只存在你本机的浏览器里。</div>
+          <p class="boot-tip">角色包自带立绘、背景、CG、世界书、开局和提示词，不导入任何文件也能玩。
+            预设管文风和破限：不导入就用内置的最小预设；导入酒馆的聊天补全预设效果更好。</p>
+        </div>
+
+        <!-- ② 接口 -->
+        <div class="boot-pane" data-pane="api">
+          <div class="grid2">
+            <label>协议
+              <select id="cfg-protocol">
+                <option value="openai">OpenAI 兼容</option>
+                <option value="claude">Anthropic</option>
+                <option value="gemini">Gemini</option>
+              </select>
+            </label>
+            <label>模型
+              <span style="display:flex;gap:6px">
+                <input type="text" id="cfg-model" list="model-list" placeholder="claude-sonnet-4-5" style="flex:1">
+                <button type="button" id="btn-models" style="white-space:nowrap;padding:8px 12px">拉取</button>
+              </span>
+              <datalist id="model-list"></datalist>
+              <select id="cfg-model-sel" hidden></select>
+            </label>
+          </div>
+          <label>API 地址 <input type="text" id="cfg-base" placeholder="https://api.anthropic.com"></label>
+          <label>密钥 <input type="password" id="cfg-key" placeholder="sk-..."></label>
+          <div class="grid3">
+            <label>温度 <input type="number" id="cfg-temp" step="0.05" min="0" max="2"></label>
+            <label title="这是硬上限。预设里常写 60000，直接照做容易在中转上半路断线。"
+              >最大输出(上限) <input type="number" id="cfg-max" step="256" min="256"></label>
+            <label class="chk"><input type="checkbox" id="cfg-stream" checked> 流式</label>
+          </div>
+          <div class="grid2">
+            <label title="酒馆的「提示词后处理」。中转报消息格式错、或者一到多轮就乱，试试「全部合成一条」"
+              >消息后处理
+              <select id="cfg-post">
+                <option value="auto" title="对话中途的 system 改成 user，位置不动">自动（推荐）</option>
+                <option value="keep" title="OpenAI 官方等支持中途 system 的接口">保留 system</option>
+                <option value="single" title="中转一见多轮就乱时用">合成一条消息</option>
+              </select>
+            </label>
+            <label title="预设里的「助手预填」assistant_prefill。新一代 Claude 不收会自动去掉"
+              >助手预填
+              <select id="cfg-prefill">
+                <option value="auto" title="Anthropic 协议与 DeepSeek 官方发，其余不发">自动（推荐）</option>
+                <option value="all">所有接口都发</option>
+                <option value="off">不发</option>
+              </select>
+            </label>
+          </div>
+          <div class="row">
+            <button id="btn-test">测试连接</button>
+            <span class="note" id="test-note"></span>
+          </div>
+          <div class="row">
+            <span class="dim" style="font-size:12px">不知道模型名就先空着，点「测试连接」会列出这个接口能用的全部模型，挑一个再测一次。</span>
+          </div>
+          <p class="boot-tip">地址填根地址就行，<code>/v1</code> 这些会自动补。
+            401/403 是密钥问题，404 多半是地址少了或多了 <code>/v1</code>，
+            控制台报 CORS 说明这个端点不让浏览器直连，得走中转。</p>
+          <!-- 副 API：小手机当成单独的环境（v5.25）。配置存 gal_api2_config / gal_phone_env -->
+          <div class="boot-sub">
+            <h4>小手机 · 单独的环境</h4>
+            <label class="chk"><input type="checkbox" id="pe-on"> 把小手机当成单独的环境</label>
+            <p class="dim">打开后：正文请求里不再让 AI 顺手写手机内容（剧情更专注、省 token）；
+              每轮正文结束后，另外发一次请求，专门生成这段时间手机里新冒出来的私聊、群聊、动态和热点。
+              手机里你自己发的消息、评论，本来就是单独生成的。</p>
+            <label>多久更新一次手机
+              <select id="pe-every">
+                <option value="1">每轮正文之后</option>
+                <option value="2">每 2 轮</option>
+                <option value="3">每 3 轮</option>
+                <option value="0">不自动（只有我在手机里聊天时才生成）</option>
+              </select>
+            </label>
+            <label class="chk"><input type="checkbox" id="sub-on"> 小手机用单独的 API（副 API）</label>
+            <p class="dim">可以给手机填一个便宜、快的模型，正文继续用好模型。不开就和正文共用上面的主 API。</p>
+            <div id="sub-box" hidden>
+              <div class="grid2">
+                <label>协议
+                  <select id="sub-protocol">
+                    <option value="openai">OpenAI 兼容</option>
+                    <option value="claude">Anthropic</option>
+                    <option value="gemini">Gemini</option>
+                  </select>
+                </label>
+                <label>模型
+                  <span style="display:flex;gap:6px">
+                    <input type="text" id="sub-model" placeholder="例如 deepseek-chat" style="flex:1">
+                    <button type="button" id="btn-sub-models" style="white-space:nowrap;padding:8px 12px">拉取</button>
+                  </span>
+                  <select id="sub-model-sel" hidden></select>
+                </label>
+              </div>
+              <label>副 API 地址 <input type="text" id="sub-base" placeholder="https://api.deepseek.com"></label>
+              <label>副 API 密钥 <input type="password" id="sub-key" placeholder="sk-..."></label>
+              <div class="grid2">
+                <label>温度 <input type="number" id="sub-temp" step="0.05" min="0" max="2"></label>
+                <label>最大输出 <input type="number" id="sub-max" step="100" min="200"></label>
+              </div>
+              <div class="row">
+                <button type="button" id="btn-sub-test">测试副 API</button>
+                <button type="button" id="btn-sub-copy" title="先把主 API 的地址和密钥抄过来，再改模型">抄主 API</button>
+                <span class="note" id="sub-note"></span>
+              </div>
+            </div>
+          </div>
+          <!-- 立绘 / 背景加载不出来：图片网络设置 + 测试（app.js netBoxHTML()，手机设置里也有一份） -->
+          <div class="boot-net">
+            <h4>立绘 / 背景加载不出来？</h4>
+            <div id="boot-netbox"></div>
+          </div>
+        </div>
+
+        <!-- ③ 插画（可选） -->
+        <div class="boot-pane" data-pane="art">
+          <div class="boot-art">
+            <div class="row" style="justify-content:space-between;align-items:center">
+              <div>
+                <b style="color:var(--main)">每轮自动出插画，铺成 CG</b>
+                <p class="dim" style="margin-top:4px">这一步可以跳过，之后在「设置 · 文生图」里随时开。</p>
+              </div>
+              <label class="boot-sw"><input type="checkbox" id="boot-ig-on"><span></span></label>
+            </div>
+            <label>NovelAI Token
+              <input type="password" id="boot-ig-key" placeholder="pst-…"></label>
+            <p class="note" id="boot-ig-note"></p>
+          </div>
+          <p class="boot-tip">要填<b>持久 token</b>，不是登录密码：NovelAI 网页 → 用户设置 →
+            Account → Get Persistent API Token。<br>
+            默认 1216×832 / 23 步，正好在 Opus 会员的免费档内（≤1,048,576 像素且 ≤28 步）。</p>
+        </div>
+
+        <!-- ④ 开场 -->
+        <div class="boot-pane" data-pane="go">
+          <label>你的称呼 <input type="text" id="cfg-user" placeholder="制作人"></label>
+          <!-- 开场：卡里写好的几段 / 自己定（v5.25）。自定义那一大块由 app.js「自定义开场」一节画 -->
+          <div class="op-mode seg" role="tablist">
+            <button type="button" data-opmode="card" class="on">卡里的开场白</button>
+            <button type="button" data-opmode="custom">自定义开场</button>
+          </div>
+          <div id="op-card">
+            <label>开场白 <select id="opening-sel"><option value="">（先载入角色卡）</option></select></label>
+          </div>
+          <div id="op-custom" hidden></div>
+          <div class="boot-ready" id="boot-ready"></div>
+          <div class="note" id="boot-note"></div>
+        </div>
+      </div>
+
+      <footer class="boot-nav">
+        <button type="button" id="boot-prev">‹ 上一步</button>
+        <span class="sp"></span>
+        <button type="button" id="boot-next">下一步 ›</button>
+        <button class="primary" id="btn-start" disabled>开 始 游 戏</button>
+      </footer>
+    </section>
+  </div>
+</div>
+
+<script src="core/terms.js?v=mc0.1"></script>
+<!-- 必须是第一个脚本：它要能接住后面任何一个脚本的语法错误和初始化异常 -->
+<script src="core/crash.js?v=mc0.1"></script>
+<script src="core/cardres.js?v=mc0.1"></script>
+<script src="core/tokens.js?v=mc0.1"></script>
+<script src="core/vector.js?v=mc0.1"></script>
+<script src="core/imagegen.js?v=mc0.1"></script>
+<script src="core/snapshot.js?v=mc0.1"></script>
+<script src="core/gallery.js?v=mc0.1"></script>
+<script src="core/cg.js?v=mc0.1"></script>
+<script src="core/resolver.js?v=mc0.1"></script>
+<script src="core/worldbook.js?v=mc0.1"></script>
+<script src="core/regex.js?v=mc0.1"></script>
+<script src="core/prompt.js?v=mc0.1"></script>
+<script src="core/script.js?v=mc0.1"></script>
+<script src="core/phone.js?v=mc0.1"></script>
+<script src="core/memory.js?v=mc0.1"></script>
+<script src="core/milkcat.js?v=mc0.1"></script>
+<script src="core/engine.js?v=mc0.1"></script>
+<script src="core/api.js?v=mc0.1"></script>
+<script src="core/savetree.js?v=mc0.1"></script>
+<script src="core/imgnet.js?v=mc0.1"></script>
+<script src="core/opening.js?v=mc0.1"></script>
+<script src="core/storage.js?v=mc0.1"></script>
+<script src="core/editors.js?v=mc0.1"></script>
+<script src="core/customsprites.js?v=mc0.1"></script>
+<script src="core/packs.js?v=mc0.1"></script>
+<script src="packs/tianqing/data.js?v=mc0.1"></script>
+<script src="packs/tianqing/pack.js?v=mc0.1"></script>
+<script src="app/app.js?v=mc0.1"></script>
+</body>
+</html>

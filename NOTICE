@@ -1,0 +1,63 @@
+超级奶猫（MilkCat）—— 来源与署名
+================================
+
+本仓库自己的代码按 MIT 发布（见 LICENSE）。下面列出不属于「本仓库自己的代码」的东西：
+它们从哪来、什么条款、在仓库里的什么位置。
+
+
+一、角色包里的内容（不适用 MIT）
+--------------------------------
+
+### 天青（packs/tianqing/）
+
+  来源    Larimar · SummerNight Plus（天青原版独立前端）
+          https://github.com/satorizeppelin/Larimar
+  授权    经天青作者委托与授权，在超级奶猫里使用 Larimar 的代码思路、素材链接、
+          角色设定、开局与提示词。
+  内容    packs/tianqing/data.js —— 由 tools/build-pack-tianqing.mjs 从 Larimar 仓库生成：
+            立绘 / 小头像 / 背景 / CG / 表情包的图片地址（图片本身托管在
+            Hugging Face think-denim-frisk/Larimar 等处，不在本仓库）、
+            三个开局、角色世界书、系统提示词、各手机 App 提示词、默认变量、界面默认值、文生图标签。
+          packs/tianqing/pack.js —— 天青的配置，以及超级奶猫新增的两条提示词
+            （「多人同台」「手机钩子写法补充」），新增部分已在文件里标明。
+  改动    唯一的改写：格式标签前缀 summernight → MilkCat。人设、世界观、文风提示词原样照搬。
+  条款    这些内容的权利归天青作者所有，不随本仓库的 MIT 许可证授出。
+          要在别处使用天青的内容，请先联系天青作者。
+
+
+二、引擎的来历
+--------------
+
+超级奶猫的引擎从 gal 引擎（juus 独立前端，本项目维护者自己的项目，MIT）复制而来，
+包括：多人同台舞台、剧本解析、提示词组装、世界书激活、正则、存档树、长期记忆、
+文生图、图片网络、手机端适配等。引擎的完整演化记录见 docs/gal引擎交接（底子）.md。
+
+参考过但没有复制代码的项目（设计层面的影响）：
+
+### KaiTuoYiShi（开拓遗失）
+
+  https://github.com/LingYuYue1/KaiTuoYiShi
+  条款  MIT © 2026 LingYuYue1
+  core/imagegen.js 的 NovelAI 调用流程、core/snapshot.js 的两段式出图提示词、
+  存档树与重roll 的思路参考了它。
+
+
+三、随仓库分发的第三方代码
+--------------------------
+
+### gpt-tokenizer
+
+  文件    core/vendor/gpt-tokenizer-cl100k_base.js
+          core/vendor/gpt-tokenizer-o200k_base.js
+          core/vendor/gpt-tokenizer-LICENSE.txt
+  来源    npm 包 gpt-tokenizer 2.9.0，官方 dist/ 里的 UMD 构建，原样未改
+  作者    Bazyli Brzoska
+  条款    MIT（全文见 core/vendor/gpt-tokenizer-LICENSE.txt）
+  用途    core/tokens.js 的真实 BPE 分词；删掉这两个文件会自动回退粗估，不报错
+
+
+四、不在本仓库里的东西
+----------------------
+
+  玩家自己导入的酒馆预设、世界书、正则、角色卡 —— 只存在玩家自己的浏览器里，不上传、不进仓库。
+  立绘 / 背景 / CG 等图片 —— 角色包里只有地址，图片托管在第三方图床上。
