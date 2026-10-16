@@ -13,6 +13,7 @@
  *   I. 和同一网站下的 juus 版隔开：localStorage 前缀、IndexedDB 库名、「沿用 juus 版的接口设置」
  *   J. 祈语（第二个角色，v0.3）：选她 → 她的开局（卡里的开场白）、称呼「旅伴」、她自己的格式 / 立绘 / 变量；
  *      一轮里私聊用她自己的 LINE 提示词；「天青 × 祈语」同台开局自动换成天青主角 + 祈语客串，两人同台，客串的祈语私聊也用她的提示词
+ *   K. 设置界面的角色卡片：点卡片 = 换她当主角（单玩祈语，天青下场）；「＋ 客串」只加 / 去掉客串；标题画面选角色 = 只玩她
  *
  * 用法：node tools/e2e-milkcat.mjs [要测的目录] [截图输出目录]
  * ============================================================ */
@@ -441,6 +442,48 @@ console.log('\n[J 祈语：第二个角色（主角 / 客串 / 同台开局）]'
   MODE = 'tq';
   /* 手机提示词设置：主角包 + 客串包可以切着看 */
   await E(() => window.__gal.leaveGame && window.__gal.leaveGame()); await p.waitForTimeout(500);
+}
+
+console.log('\n[K 设置界面的角色卡片：单玩祈语 / 加客串]');
+{
+  await p.reload(); await p.waitForTimeout(1200);
+  await E(() => MCTitle.hide());
+  await E(() => document.querySelector('#boot-steps button[data-step="asset"]').click()); await p.waitForTimeout(300);
+  const st = () => E(() => ({ c: MilkCatPacks.choice(), ops: [...document.querySelectorAll('#opening-sel option')].map(o => o.textContent.split(' · ')[0]),
+    user: Terms.user, cards: [...document.querySelectorAll('#pack-box .mc-pack')].map(x => x.querySelector('b').textContent + ':' + x.querySelector('i').textContent +
+      ':' + ((x.querySelector('.mc-guest') || {}).textContent || '')), pool: window.__gal.eng.pool.map(e => e.comment) }));
+  /* 先回到天青单人（J 里同台开局把祈语加成了客串：点她的「✓ 客串中」去掉） */
+  await E(() => document.querySelector('#pack-box .mc-pack[data-pack="tianqing"]').click()); await p.waitForTimeout(300);
+  await E(() => { const g = document.querySelector('#pack-box .mc-pack[data-pack="qiyu"] .mc-guest.on'); if (g) g.click(); }); await p.waitForTimeout(300);
+  const s0 = await st();
+  ok('天青当主角时：祈语卡片上有「＋ 客串」，写着「点一下换她当主角」', s0.c.main === 'tianqing' && s0.cards.some(x => /^祈语:点一下换她当主角:＋ 客串$/.test(x)), JSON.stringify(s0.cards));
+  await E(() => document.querySelector('#pack-box .mc-pack[data-pack="qiyu"]').click()); await p.waitForTimeout(400);
+  const s1 = await st();
+  ok('点祈语的卡片：她当主角、天青下场（不变客串），开场白换成祈语的', s1.c.main === 'qiyu' && s1.c.extra.length === 0 &&
+     s1.ops.join() === '幸运观众,说走就走,草莓千层,天青 × 祈语' && s1.user === '旅伴' && !s1.pool.includes('天青'), JSON.stringify({ c: s1.c, ops: s1.ops, user: s1.user }));
+  await p.screenshot({ path: `${OUT}/mc-k-qiyu-main.png` });
+  await E(() => document.querySelector('#pack-box .mc-pack[data-pack="tianqing"] .mc-guest').click()); await p.waitForTimeout(400);
+  const s2 = await st();
+  ok('点天青的「＋ 客串」：祈语还是主角，天青客串（她的设定和客串提示词进来）', s2.c.main === 'qiyu' && s2.c.extra.join() === 'tianqing' &&
+     s2.ops[0] === '幸运观众' && s2.pool.includes('天青') && s2.pool.includes('天青（客串）') && s2.cards.some(x => /^天青:.*:✓ 客串中$/.test(x)), JSON.stringify({ c: s2.c, cards: s2.cards }));
+  await E(() => document.querySelector('#pack-box .mc-pack[data-pack="tianqing"] .mc-guest').click()); await p.waitForTimeout(400);
+  const s3 = await st();
+  ok('再点「✓ 客串中」：去掉客串', s3.c.main === 'qiyu' && s3.c.extra.length === 0 && !s3.pool.includes('天青'), JSON.stringify(s3.c));
+  /* 选祈语单人的开局、开演，天青不在 */
+  await E(() => { const s = document.getElementById('opening-sel'); s.value = '2'; s.dispatchEvent(new Event('change')); });
+  await E(() => document.querySelector('#boot-steps button[data-step="go"]').click()); await p.waitForTimeout(200);
+  await E(() => document.getElementById('btn-start').click()); await p.waitForTimeout(1500);
+  const g = await E(() => ({ c: MilkCatPacks.choice(), op: window.__gal.eng.history[0] && window.__gal.eng.history[0].content.slice(0, 200) }));
+  ok('单玩祈语：开「草莓千层」，天青不在故事里', g.c.main === 'qiyu' && g.c.extra.length === 0 && /草莓|牙印/.test(g.op || ''), JSON.stringify(g).slice(0, 200));
+  await E(() => window.__gal.leaveGame()); await p.waitForTimeout(500);
+  /* 标题画面选角色 = 只玩她：客串清空 */
+  await E(() => MilkCatPacks.setChoice({ main: 'qiyu', extra: ['tianqing'] }));
+  await p.reload(); await p.waitForTimeout(1200);
+  await p.click('#mc-title-new'); await p.waitForTimeout(800);
+  await E(() => document.querySelector('#mc-open .opening-dot[data-index="1"]').click()); await p.waitForTimeout(400);
+  await p.click('#mc-open-confirm'); await p.waitForTimeout(700);
+  ok('标题画面选祈语：只玩她（之前加的天青客串清掉）', await E(() => { const c = MilkCatPacks.choice(); return c.main === 'qiyu' && c.extra.length === 0; }));
+  await E(() => MCTitle.closeCarousel());
 }
 
 ok('没有报错', errs.length === 0, errs.join(' | '));

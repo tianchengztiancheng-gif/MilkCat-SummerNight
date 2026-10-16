@@ -66,6 +66,12 @@ ok('反过来（祈语主角、天青客串）：天青的立绘名单作为客�
    n2.filter(n => n === 'GAL格式').length === 1, n2.join(' / '));
 ok('称呼表：天青「制作人」、祈语「旅伴」', PK.allTerms().join() === '制作人,旅伴');
 
+PK.setChoice({ main: 'tianqing', extra: ['qiyu'] }); PK.applyResources(PK.activeAll());
+const both = Object.keys(sb.RESOURCE.characters).sort().join();
+PK.setChoice({ main: 'qiyu', extra: [] }); PK.applyResources(PK.activeAll());
+ok('单玩祈语：天青的立绘、头像摘掉，背景留着', both === '天青,祈语' && Object.keys(sb.RESOURCE.characters).join() === '祈语' &&
+   !sb.PHONE_RES.avatars['天青'] && !!sb.RESOURCE.scenes['商业街'], both + ' → ' + Object.keys(sb.RESOURCE.characters).join());
+
 console.log('\n[手机提示词按角色]');
 PK.setChoice({ main: 'tianqing', extra: ['qiyu'] });
 ok('天青主角时：天青私聊用天青的 LINE 提示词', /你现在是天青/.test(PK.phonePrompt('line', '天青')) && PK.phonePromptPack('line', '天青').id === 'tianqing');

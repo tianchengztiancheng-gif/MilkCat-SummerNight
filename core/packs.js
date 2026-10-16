@@ -69,6 +69,15 @@
     Ph.defaultAvatars = Ph.defaultAvatars || [];
     Ph.groupMeta = Ph.groupMeta || {};
     Ph.basePosts = Ph.basePosts || []; Ph.baseTrends = Ph.baseTrends || [];
+    /* 没启用的包的角色先摘掉（单玩祈语时天青的立绘、头像不该还挂着）；背景是共用的，留着 */
+    var on = {}; packs.forEach(function (pk) { on[pk.id] = 1; });
+    ORDER.forEach(function (id) {
+      if (on[id]) return;
+      Object.keys(REG[id].characters || {}).forEach(function (name) {
+        if (packs.some(function (pk) { return pk.characters && pk.characters[name]; })) return;
+        delete R.characters[name]; delete R.defaults[name]; delete Ph.avatars[name];
+      });
+    });
     packs.forEach(function (pk) {
       Object.keys(pk.characters || {}).forEach(function (name) {
         var ch = pk.characters[name];

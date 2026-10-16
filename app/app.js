@@ -2109,7 +2109,7 @@
         return '<button data-sec="' + x.k + '"' + (i === 0 ? ' class="on"' : '') + '>' +
           '<b>' + x.t + '</b><span>' + x.d + '</span></button>';
       }).join('') +
-      '<div class="kt-ver">超级奶猫 · v0.2</div></nav>' +
+      '<div class="kt-ver">超级奶猫 · v0.3</div></nav>' +
       '<section class="kt-main">' +
       '<header class="kt-head"><h2 id="kt-title"></h2><p id="kt-sub"></p>' +
       '<div class="kt-acts" id="kt-acts"></div></header>' +
@@ -4795,25 +4795,31 @@
         var names = Object.keys(pk.characters || {});
         var ch = pk.characters[names[0]] || {};
         var nExpr = names.reduce(function (n, k) { return n + Object.keys((pk.characters[k] || {}).expressions || {}).length; }, 0);
+        /* 不是主角的卡片上多一个「＋客串」小开关：点卡片本身 = 换她当主角（原来的主角下场，不会自动变客串），点小开关 = 只加 / 去掉客串 */
+        var guestBtn = on && !isMain ? '<span class="mc-guest' + (isGuest ? ' on' : '') + '" role="button" data-guest="' + esc(pk.id) + '" title="' +
+          (isGuest ? '不让她客串了' : '让她作为客串加入现在主角的故事') + '">' + (isGuest ? '✓ 客串中' : '＋ 客串') + '</span>' : '';
         return '<button type="button" class="mc-pack' + (isMain ? ' on' : '') + (isGuest ? ' guest' : '') + '" data-pack="' + esc(pk.id) + '">' +
           /* lazy：引导页一打开是被标题盖着的，图床被墙时别让这几张头像拖住整页的 load */
           '<img alt="" loading="lazy" src="' + esc(ImgNet.srcFor(ch.avatar || '')) + '">' +
           '<span class="t"><b>' + esc(pk.name) + '</b>' +
-          '<i>' + (isMain ? '主角' : isGuest ? '客串' : '点一下当主角') + '</i>' +
+          '<i>' + (isMain ? '主角' : isGuest ? '客串 · 点卡片换她当主角' : '点一下换她当主角') + '</i>' +
           '<em>' + names.length + ' 个角色 · ' + nExpr + ' 种表情 · ' + Object.keys(pk.scenes || {}).length + ' 个地点 · ' +
-            Object.keys(pk.cg || {}).length + ' 张 CG · ' + (pk.openings || []).length + ' 个开局</em></span></button>';
+            Object.keys(pk.cg || {}).length + ' 张 CG · ' + (pk.openings || []).length + ' 个开局</em></span>' + guestBtn + '</button>';
       }).join('') + '</div>' +
-      '<p class="mc-packs-note">以后加入的角色也会出现在这里。一次可以选一个主角，其他角色作为客串加入同一个故事。</p>';
+      '<p class="mc-packs-note">点卡片 = 换她当主角，开场白跟着换成她的（只玩她一个人）。想让别的角色一起出场，点那张卡片右边的「＋ 客串」。' +
+      '两人同台的开局（比如「天青 × 祈语」）会自己把要的角色都叫上。</p>';
     PA2('#pack-box [data-pack]').forEach(function (b) {
-      b.onclick = function () {
+      b.onclick = function (e) {
         var id = b.getAttribute('data-pack'), cc = MilkCatPacks.choice();
-        if (packMode() && cc.main === id) return;
-        if (packMode() && cc.main !== id) {
-          /* 别的包：已经是客串就取消，否则加成客串；长按 / 双击换主角留到有第二个角色时再做 */
+        var g = e && e.target && e.target.closest && e.target.closest('[data-guest]');
+        if (g && packMode() && cc.main !== id) {
+          /* 「＋ 客串」：只加 / 去掉客串，主角不变 */
           var i = cc.extra.indexOf(id);
           if (i >= 0) cc.extra.splice(i, 1); else cc.extra.push(id);
           usePacks(cc);
-        } else usePacks({ main: id, extra: cc.extra });
+        } else if (packMode() && cc.main === id) return;
+        /* 点卡片：她当主角。原来的主角下场（不自动变成客串）；她要是之前在客串，也从客串里拿掉 */
+        else usePacks({ main: id, extra: cc.extra.filter(function (x) { return x !== id; }) });
         noteAssets();
       };
     });
@@ -6006,10 +6012,11 @@
       characters: titleCharacters,
       currentPack: function () { return MilkCatPacks.choice().main; },
       openings: titleOpenings,
+      /* 标题画面选角色 = 只玩她：主角换成她，客串清空（两人同台的开局开演前会自己把要的角色叫上） */
       pickCharacter: function (id) {
         var cc = MilkCatPacks.choice();
-        if (cc.main === id) return;
-        usePacks({ main: id, extra: cc.extra.filter(function (x) { return x !== id; }) });
+        if (cc.main === id && !cc.extra.length) return;
+        usePacks({ main: id, extra: [] });
         noteAssets();
         MCTitle.refresh();
       },
