@@ -30,7 +30,10 @@
 | `core/packs.js` | `MilkCatPacks`：`register / list / choice / apply / buildCard / openings / initialVars / varMeta / phonePrompt / setPhonePrompt / mechanics / defaultPreset` |
 | `core/terms.js` | `Terms.user / crowd / world`。引擎里所有「发给模型的称呼」都从这里取 |
 | `packs/tianqing/data.js` | 生成的，别手改。`tools/build-pack-tianqing.mjs <Larimar 目录>` |
-| `packs/tianqing/pack.js` | 天青配置 + 新增两条提示词（多人同台、钩子写法补充，order 205/206） |
+| `packs/tianqing/pack.js` | 天青配置 + 新增两条提示词（多人同台、钩子写法补充，order 205/206）+ 客串提示词（v0.3） |
+| `packs/qiyu/data.js` | 生成的，别手改。`tools/build-pack-qiyu.mjs <祈语角色卡.png> <立绘清单.txt>` |
+| `packs/qiyu/pack.js` | 祈语配置、她的全部提示词（主角 / 客串 / 手机）、「天青 × 祈语」同台开局 |
+| `tools/unit/test-packs.mjs` | 两个包一起的单测（27 项）：跨包开局、开局要求的包、按角色取手机提示词、提示词按包存 |
 | `core/ns.js` | **页面第一个脚本**。把 `window.localStorage` 换成带 `mc:` 前缀的包装（见下面「存储」） |
 | `app/title.js` | 标题画面 + 选角色 / 选开局轮播的界面（`MCTitle`），玩法由 app.js「标题画面」一节通过 `MCTitle.init(hooks)` 接进来 |
 | `app/title.css` | 从 Larimar `interface/stage.css` 的 `#title-screen` / `#opening-panel` 移植；视口单位全换成容器单位 cqw / cqh |
@@ -106,6 +109,38 @@ GitHub Pages 上同一个账号的所有仓库是同一个「源」（`tiancheng
 - URL 带 `?title=0` 不显示标题（老的 e2e 测试都加了它，它们直接点引导页）
 - 角色包要给：`title: { bg, sub }`、`tagline`（角色轮播的副标题）、`cover: { bg: 场景名, expr: 表情 }`
 
+## 五·五、第二个角色：祈语（v0.3）
+
+- **数据**：`tools/build-pack-qiyu.mjs` 读角色卡（PNG 的 tEXt `ccv3` / `chara`）和立绘清单（「表情：地址」开新表情，只有地址的行是上一个表情的另一张；
+  同名表情出现两次接着加，重复地址去掉）。卡里的开场白是散文，脚本按段转成 `<MilkCat>`：整段引号 = 祈语说话（套「」），整段反引号 = 心里话（套（）），
+  其余旁白。每句配的表情、背景、登场位置、选项、快照、开局变量写在脚本里的 `SPEC`；表情个数和句数对不上、用了名单外的表情、
+  文字里有 `| < >` 都直接报错。`data.greetings` 留着原文；单测会逐段核对原文都在剧本里。
+- **配置**（`packs/qiyu/pack.js`）：称呼「旅伴」；名字色 `#ecd28e`；背景借天青包的 `scenes`（她满世界跑，背景名写「卢布尔雅那的河边小街」，ID 用 `小镇`）；
+  变量 = 时间 / 地点 / **奇迹能量**（0~100，完成小奇迹 +5~15，攒满才能瞬间移动）。
+  提示词分三组：`prompts`（她当主角，order 对齐天青包：-1000 变量列表 / 200 更新规则 / 201 格式 / 202 立绘 / 203 背景 / 204 APP / 205 多人同台 / 206 钩子补充）、
+  `guestPrompts`（她当客串：立绘名单 + 怎么写她，order 207）、`phonePrompts`（line / call / twitter / agency；没有 twitch）。
+- **天青包加了 `guestPrompts`**：原版「立绘」名单只在主角的 `prompts` 里，天青当客串时模型不知道她有哪些表情，单独给一条「天青（客串）」。
+- **同台开局**：开局对象可以带 `packs: { main, extra }`。`MilkCatPacks.openings(pk)` 把别的包里点名了 pk 的同台开局也列进来（天青、祈语的列表里都有「天青 × 祈语」），
+  要的包没装就不列。开演（`btn-start`）时 `MilkCatPacks.satisfies(pick.packs)` 不满足就 `usePacks()` 换包，再按 `id` 在新列表里找回同一个开局。
+- **称呼跟着主角包换**：`usePacks` 里，玩家名字是空的 / 「指挥官」/ 任何一个包的默认称呼（`MilkCatPacks.allTerms()`）时换成新主角包的；玩家自己起过名字就不动。
+- **手机提示词按角色**：`phonePrompt(app, who)`——`who` 所在的包有这个 App 的提示词就用它的（客串的祈语私聊用祈语的 LINE 提示词），否则主角包的。
+  `fillAppPrompt(..., native)`：用的是她自己包的提示词时，不再把主角名替换成她。
+  玩家改过的存在 `mc_phone_prompts` 的 `包id:App` 键里；v0.2 存的无前缀键算天青的（恢复默认时一起删）。设置 · 手机提示词里，客串包有自己的提示词时可以切着改。
+- 引导页角色包卡片的头像加了 `loading="lazy"`：祈语的头像在猫箱，图床被墙时不拖住整页 `load`（e2e-imgnet 的「图床黑洞」就是卡在这）。
+
+### 怎么加一个角色（照着祈语走一遍）
+
+1. **数据**：写 `tools/build-pack-<id>.mjs`，从她的来源（角色卡 / 原版仓库）生成 `packs/<id>/data.js`：立绘（`{ 表情: [url] }`）、小头像、世界书（卡格式条目原样）、开局（`<MilkCat>` 剧本）。
+   来源是散文的开场白，参考祈语的 `SPEC` 按段转，文字照抄。
+2. **配置**：`packs/<id>/pack.js` 里 `MilkCatPacks.register({ id, name, main, terms, title, tagline, cover, characters, scenes, cg, stickers, openings, worldbook, prompts, guestPrompts, phonePrompts, variables, mechanics })`。
+   `prompts` 是她当主角时的系统提示词（格式约定、立绘、背景、变量、APP、多人同台、钩子补充，order 对齐天青包）；`guestPrompts` 是她当客串时的（至少给立绘名单）。
+   没有背景图就借别的包的 `scenes`。
+3. **和别人同台的开局**：在她的 `openings` 里加一条带 `packs: { main, extra }` 的，两边的列表都会出现。
+4. **装上**：`index.html` 里 `packs/<id>/data.js`、`pack.js`（带 `?v=`）放在 `core/packs.js` 之后、`app/title.js` 之前；`tools/smoke-test.js` 的 `FILES` 也加上。
+5. **测**：`tools/unit/test-packs.mjs` 照着加她的检查（表情都在名单里、开局能解析、提示词路由）；`tools/e2e-milkcat.mjs` 的「J」一节是端到端的样子。
+   标题轮播的角色数、开局数在 e2e 里是写死的，加了角色要跟着改。
+6. **NOTICE**：写清来源和条款。
+
 ## 六、下一步
 
 1. 直播间（`mechanics/livestream`）：Larimar 的 Twitch 界面（关注页、弹幕、SC、回放），现在先落成一条动态
@@ -113,4 +148,5 @@ GitHub Pages 上同一个账号的所有仓库是同一个「源」（`tiancheng
 3. LINE 通话：来电 / 接通后切成立绘对话场景（现在只记「未接来电」）
 4. 二级钩子（App 生成里再带钩子）、Twitter 热度衰减
 5. 门面：~~标题画面、开局封面轮播~~（v0.2 做了）、边生成边演、自动播放、资源缓存；标题主视觉视频（Larimar 默认关着，没搬）、天青原版的全屏存档 DATA 页
-6. 第二个角色到了以后：写「怎么加一个角色」的说明，用她走一遍主角 / 客串
+6. ~~第二个角色到了以后：写「怎么加一个角色」的说明，用她走一遍主角 / 客串~~（v0.3：祈语，见五·五）
+7. 祈语的机制：奇迹能量现在只是变量，可以做成面板（攒满时的「瞬间移动」演出）；她没有自己的背景图和 CG

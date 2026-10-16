@@ -1,7 +1,7 @@
 {
   "name": "milkcat",
-  "version": "0.2.0",
-  "description": "超级奶猫：多人同台的角色 galgame 前端（天青是第一个角色），不依赖 SillyTavern，双击 index.html 就能玩",
+  "version": "0.3.0",
+  "description": "超级奶猫：多人同台的角色 galgame 前端（天青是第一个角色，祈语是第二个），不依赖 SillyTavern，双击 index.html 就能玩",
   "private": true,
   "type": "commonjs",
   "scripts": {

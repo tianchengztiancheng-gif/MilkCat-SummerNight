@@ -236,6 +236,8 @@ console.log('\n[E 网络正常]');
   /* 设置成「总走中转」：直接走中转，不碰图床 */
   const { ctx, p, hits } = await page({ catbox: 'ok', relay: 'ok' });
   await p.evaluate(() => window.ImgNet.setConfig({ mode: 'relay' }));
+  /* 页面刚打开时（还没切到「总走中转」）引导页角色包卡片上的头像可能已经直连拉过了（祈语的头像在猫箱）：从切换之后开始数 */
+  hits.catbox = 0;
   await loadCard(p);
   await clickStart(p);
   await p.waitForTimeout(1500);

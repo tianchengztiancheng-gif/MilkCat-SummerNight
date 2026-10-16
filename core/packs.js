@@ -122,12 +122,38 @@
     };
   }
 
-  /** 开局列表（给开场引导用）：[{ n: 标题, t: 原文, sub, cover: { bg, expr } }] */
+  /**
+   * 开局列表（给开场引导用）：[{ n: 标题, t: 原文, sub, id, cover: { bg, expr }, packs }]
+   * 自己包里的开局在前；别的包里写了 packs（「这个开局要哪几个包一起上」）并且点名了这个包的同台开局也列进来，
+   * 比如祈语包里的「天青 × 祈语」（packs: { main: 'tianqing', extra: ['qiyu'] }）在天青和祈语的列表里都有。
+   * 开局带 packs 时，app 开演前会先按它换好主角包和客串包。
+   */
   function openings(pk) {
     pk = pk || active();
-    return ((pk && pk.openings) || []).map(function (o) {
-      return { n: o.title, t: o.raw, sub: o.subtitle || '', id: o.id, cover: { bg: o.coverBgId || '', expr: o.coverExpr || '' } };
+    if (!pk) return [];
+    var own = (pk.openings || []).slice(), seen = {};
+    own.forEach(function (o) { if (o.id) seen[o.id] = 1; });
+    ORDER.forEach(function (id) {
+      if (id === pk.id) return;
+      (REG[id].openings || []).forEach(function (o) {
+        var ps = o.packs;
+        if (!ps || (o.id && seen[o.id])) return;
+        if (ps.main === pk.id || (ps.extra || []).indexOf(pk.id) >= 0) { own.push(o); if (o.id) seen[o.id] = 1; }
+      });
     });
+    return own.filter(function (o) {
+      var ps = o.packs; if (!ps) return true;
+      return [ps.main].concat(ps.extra || []).every(function (id) { return !!REG[id]; });   // 要的包没装就不列
+    }).map(function (o) {
+      return { n: o.title, t: o.raw, sub: o.subtitle || '', id: o.id, cover: { bg: o.coverBgId || '', expr: o.coverExpr || '' },
+        packs: o.packs ? { main: o.packs.main, extra: (o.packs.extra || []).slice() } : null };
+    });
+  }
+  /** 现在启用的包是不是正好满足这个开局要的 packs（主角一样、要的客串都在） */
+  function satisfies(ps) {
+    if (!ps) return true;
+    var c = choice();
+    return c.main === ps.main && (ps.extra || []).every(function (id) { return c.extra.indexOf(id) >= 0; });
   }
 
   /** 开局变量：主角包的初始变量（深拷贝）+ 客串包追加的 */
@@ -148,21 +174,51 @@
     return m;
   }
 
-  /** 某个手机 App 的提示词：玩家改过的优先，其次主角包的 */
+  /** 这个角色属于哪个包（有立绘的角色） */
+  function packOf(who) {
+    if (!who) return null;
+    for (var i = 0; i < ORDER.length; i++) { var pk = REG[ORDER[i]]; if (pk.characters && pk.characters[who]) return pk; }
+    return null;
+  }
+  /**
+   * 某个手机 App 的提示词。who = 给谁生成（LINE 私聊、电话是哪个角色）：
+   * 她自己的包里有这个 App 的提示词就用她的（祈语客串时，私聊用祈语自己的 LINE 提示词，不是把天青的改个名字），
+   * 否则用主角包的。玩家改过的优先 —— 按包分开存（键「包 id:App」）；v0.2 以前存的没带包 id，算天青的。
+   * 返回字符串；要知道用的是哪个包，看 phonePromptPack(app, who)。
+   */
   var PP_KEY = 'mc_phone_prompts';
-  function phonePrompt(app) {
+  function ownPrompts() {
     var own = null;
     try { own = JSON.parse(global.localStorage.getItem(PP_KEY) || 'null'); } catch (e) {}
-    if (own && own[app]) return own[app];
-    var pk = active();
-    return (pk && pk.phonePrompts && pk.phonePrompts[app]) || '';
+    return own && typeof own === 'object' ? own : {};
   }
-  function setPhonePrompt(app, text) {
-    var own = {};
-    try { own = JSON.parse(global.localStorage.getItem(PP_KEY) || '{}') || {}; } catch (e) {}
-    if (text == null) delete own[app]; else own[app] = String(text);
+  function phonePromptPack(app, who) {
+    var pk = packOf(who);
+    if (pk && pk.phonePrompts && pk.phonePrompts[app]) return pk;
+    return active();
+  }
+  function phonePrompt(app, who) {
+    var pk = phonePromptPack(app, who);
+    if (!pk) return '';
+    var own = ownPrompts();
+    if (own[pk.id + ':' + app]) return own[pk.id + ':' + app];
+    if (pk.id === 'tianqing' && own[app]) return own[app];
+    return (pk.phonePrompts && pk.phonePrompts[app]) || '';
+  }
+  /** 改 / 恢复某个包的 App 提示词（packId 不给 = 主角包）。text 为 null = 恢复默认 */
+  function setPhonePrompt(app, text, packId) {
+    var own = ownPrompts(), id = packId || (active() && active().id) || '';
+    if (text == null) { delete own[id + ':' + app]; if (id === 'tianqing') delete own[app]; }
+    else own[id + ':' + app] = String(text);
     try { global.localStorage.setItem(PP_KEY, JSON.stringify(own)); } catch (e) {}
   }
+  function phonePromptEdited(app, packId) {
+    var own = ownPrompts(), id = packId || (active() && active().id) || '';
+    return own[id + ':' + app] != null || (id === 'tianqing' && own[app] != null);
+  }
+
+  /** 所有包的称呼（换主角包时，玩家名字还是上一个包的默认称呼就跟着换） */
+  function allTerms() { return ORDER.map(function (id) { return (REG[id].terms || {}).user; }).filter(Boolean); }
 
   /** 全部有立绘的角色名（多人提示词、钩子默认对象用） */
   function cast(packs) {
@@ -231,8 +287,9 @@
   global.MilkCatPacks = {
     register: register, list: list, get: get, active: active, activeAll: activeAll,
     choice: choice, setChoice: setChoice, apply: apply, applyResources: applyResources,
-    buildCard: buildCard, openings: openings, initialVars: initialVars, varMeta: varMeta,
-    phonePrompt: phonePrompt, setPhonePrompt: setPhonePrompt, cast: cast, mechanics: mechanics,
+    buildCard: buildCard, openings: openings, satisfies: satisfies, initialVars: initialVars, varMeta: varMeta,
+    phonePrompt: phonePrompt, setPhonePrompt: setPhonePrompt, phonePromptPack: phonePromptPack, phonePromptEdited: phonePromptEdited,
+    packOf: packOf, allTerms: allTerms, cast: cast, mechanics: mechanics,
     defaultPreset: defaultPreset, spriteTable: spriteTable
   };
 })(typeof window !== 'undefined' ? window : globalThis);

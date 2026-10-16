@@ -46,7 +46,7 @@ const FILES = [
   'core/crash.js', 'core/cardres.js', 'core/tokens.js', 'core/vector.js',
   'core/imagegen.js', 'core/snapshot.js', 'core/gallery.js', 'core/cg.js',
   'core/resolver.js', 'core/worldbook.js', 'core/regex.js', 'core/prompt.js', 'core/script.js',
-  'core/phone.js', 'core/memory.js', 'core/milkcat.js', 'core/engine.js', 'core/api.js', 'core/savetree.js', 'core/imgnet.js', 'core/opening.js', 'core/storage.js', 'core/editors.js', 'core/customsprites.js', 'core/packs.js', 'packs/tianqing/data.js', 'packs/tianqing/pack.js', 'app/title.js', 'app/app.js'
+  'core/phone.js', 'core/memory.js', 'core/milkcat.js', 'core/engine.js', 'core/api.js', 'core/savetree.js', 'core/imgnet.js', 'core/opening.js', 'core/storage.js', 'core/editors.js', 'core/customsprites.js', 'core/packs.js', 'packs/tianqing/data.js', 'packs/tianqing/pack.js', 'packs/qiyu/data.js', 'packs/qiyu/pack.js', 'app/title.js', 'app/app.js'
 ];
 
 const qa0 = s2 => [...d.querySelectorAll(s2)];

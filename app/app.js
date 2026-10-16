@@ -1831,7 +1831,7 @@
       var ctx = eng.quietContext((group || name) + ' ' + userText + ' ' +
         (log || []).slice(-4).map(function (x) { return x.v; }).join(' '),
         { who: name || group });
-      var linePack = !group && packMode() && MilkCatPacks.phonePrompt('line');
+      var linePack = !group && packMode() && MilkCatPacks.phonePrompt('line', name);
       var prompt = linePack ? buildLinePrompt(name, '', userText, ctx)
         : group
         ? Phone.buildGroupPrompt(group, log, groupMembers(group), userText, ctx)
@@ -4750,8 +4750,13 @@
     loaded.card = true; loaded.pack = true;
     /* 没导入预设就用内置的最小预设，不导入任何文件也能玩 */
     if (!loaded.preset || loaded.preset === 'builtin') { eng.loadPreset(MilkCatPacks.defaultPreset()); loaded.preset = 'builtin'; presetName = '内置'; }
-    var per = Editors.loadPersona();
-    if (!per.name || per.name === '指挥官') { per.name = Terms.user; Editors.savePersona(per); if ($('cfg-user')) $('cfg-user').value = per.name; }
+    /* 玩家没自己起过名字（空的、juus 的「指挥官」、或者是别的角色包的默认称呼）就跟着主角包换：天青叫「制作人」，祈语叫「旅伴」 */
+    var per = Editors.loadPersona(), oldTerms = MilkCatPacks.allTerms().concat(['指挥官']);
+    if (!per.name || oldTerms.indexOf(per.name) >= 0) {
+      per.name = Terms.user; Editors.savePersona(per);
+      if ($('cfg-user')) $('cfg-user').value = per.name;
+      var un = GalStore.local('gal_username'); if (un && oldTerms.indexOf(un) >= 0) GalStore.local('gal_username', Terms.user);
+    }
     if (window.Opening && Opening.refreshPresets) Opening.refreshPresets();
     fillOpeningsPack();
     syncImageRule();
@@ -4791,7 +4796,8 @@
         var ch = pk.characters[names[0]] || {};
         var nExpr = names.reduce(function (n, k) { return n + Object.keys((pk.characters[k] || {}).expressions || {}).length; }, 0);
         return '<button type="button" class="mc-pack' + (isMain ? ' on' : '') + (isGuest ? ' guest' : '') + '" data-pack="' + esc(pk.id) + '">' +
-          '<img alt="" src="' + esc(ImgNet.srcFor(ch.avatar || '')) + '">' +
+          /* lazy：引导页一打开是被标题盖着的，图床被墙时别让这几张头像拖住整页的 load */
+          '<img alt="" loading="lazy" src="' + esc(ImgNet.srcFor(ch.avatar || '')) + '">' +
           '<span class="t"><b>' + esc(pk.name) + '</b>' +
           '<i>' + (isMain ? '主角' : isGuest ? '客串' : '点一下当主角') + '</i>' +
           '<em>' + names.length + ' 个角色 · ' + nExpr + ' 种表情 · ' + Object.keys(pk.scenes || {}).length + ' 个地点 · ' +
@@ -4830,11 +4836,12 @@
   }
   function userTitle() { return (Editors.loadPersona().name || '').trim() || Terms.user; }
   /** 套用手机 App 提示词里的占位符 */
-  function fillAppPrompt(tpl, who, extra) {
+  /** native = 这段提示词就是 who 自己包里的（祈语用祈语的 LINE 提示词），不用把主角的名字换成她 */
+  function fillAppPrompt(tpl, who, extra, native) {
     var v = eng.vars || {}, fame = v.名气 || {};
     var main = mainChar();
     var t = String(tpl || '');
-    if (who && main && who !== main) t = t.split(main).join(who);
+    if (!native && who && main && who !== main) t = t.split(main).join(who);
     t = t.replace(/\{\{\s*(user|producer)\s*\}\}/g, userTitle())
          .replace(/\{\{\s*char\s*\}\}/g, who || main)
          .replace(/\{\{\s*twitter\s*\}\}/g, fame.twitter != null ? fame.twitter : '未知')
@@ -4860,9 +4867,9 @@
       (ctx.scene ? '[最近的剧情]\n' + ctx.scene + '\n\n' : '');
   }
   function buildLinePrompt(who, hook, userMsg, ctx) {
-    var tpl = MilkCatPacks.phonePrompt('line');
+    var tpl = MilkCatPacks.phonePrompt('line', who), tpk = MilkCatPacks.phonePromptPack('line', who);
     var head = '[独立任务 · LINE 私聊，忽略之前的剧本格式要求，这次不写正文]\n\n';
-    var body = fillAppPrompt(tpl, who, { line_recent_message: recentLine(who) });
+    var body = fillAppPrompt(tpl, who, { line_recent_message: recentLine(who) }, !!(tpk && tpk.characters && tpk.characters[who]));
     return head + (ctx ? ((ctx.lore ? '[角色设定]\n' + ctx.lore + '\n\n' : '') + (ctx.scene ? '[现在的剧情]\n' + ctx.scene + '\n\n' : ''))
                        : hookContext(who, hook)) +
       body + (hook ? '\n\n[本回合钩子]\n' + hook : '') +
@@ -5182,16 +5189,23 @@
 
   /* ---- 手机提示词（超级奶猫）：正文钩子触发各 App 时用的提示词，角色包给默认值，玩家可以改 ---- */
   var APP_PROMPT_NAMES = { line: 'LINE 私聊', call: 'LINE 通话', twitter: 'Twitter', twitch: '直播（Twitch）', agency: '二级钩子（HOOK）' };
-  var appSel = 'line';
+  var appSel = 'line', appPack = '';
   function renderAppPrompts() {
     var host = $('apps-host'); if (!host) return;
     if (!packMode()) { host.innerHTML = '<div class="kt-empty">这些提示词属于角色包。现在用的是导入的酒馆角色卡，手机按卡自己的规则走。</div>'; return; }
-    var pk = MilkCatPacks.active(), keys = Object.keys(pk.phonePrompts || {});
+    /* 主角包 + 有自己手机提示词的客串包：可以切着看（祈语客串时，她的私聊用她自己的 LINE 提示词） */
+    var packsP = MilkCatPacks.activeAll().filter(function (p, i) { return i === 0 || Object.keys(p.phonePrompts || {}).length; });
+    var pk = packsP.filter(function (p) { return p.id === appPack; })[0] || packsP[0];
+    appPack = pk.id;
+    var keys = Object.keys(pk.phonePrompts || {});
     if (keys.indexOf(appSel) < 0) appSel = keys[0];
-    var own = (GalStore.local('mc_phone_prompts') || {})[appSel];
+    var own = MilkCatPacks.phonePromptEdited(appSel, pk.id) ? 1 : null;
     host.innerHTML = '<div class="kt-sec"><h4>手 机 提 示 词</h4>' +
       '<div class="kt-hint">正文最后的 &lt;MilkCat_hook&gt; 让哪个 App 冒消息，就用对应的这段提示词单独生成一次（有副 API 走副 API）。' +
       '占位符：{{user}} 你的称呼、{{line_recent_message}} 最近的私聊、{{hook}} 本回合钩子、{{twitter}} / {{同接}} 名气变量。</div>' +
+      (packsP.length > 1 ? '<div class="kt-acts" id="apps-packs">' + packsP.map(function (p) {
+        return '<button class="kt-btn' + (p.id === appPack ? ' on' : '') + '" data-app-pk="' + esc(p.id) + '">' + esc(p.name) + '</button>';
+      }).join('') + '</div>' : '') +
       '<div class="kt-acts" id="apps-tabs">' + keys.map(function (k) {
         return '<button class="kt-btn' + (k === appSel ? ' on' : '') + '" data-app-p="' + k + '">' + esc(APP_PROMPT_NAMES[k] || k) + '</button>';
       }).join('') + '</div>' +
@@ -5199,12 +5213,13 @@
       '<textarea id="apps-ta" rows="18"></textarea></div>' +
       '<div class="kt-acts"><button class="kt-btn kt-btn-primary" id="apps-save">保存</button>' +
       '<button class="kt-btn" id="apps-reset"' + (own == null ? ' disabled' : '') + '>恢复默认</button></div></div>';
-    $('apps-ta').value = MilkCatPacks.phonePrompt(appSel);
+    $('apps-ta').value = MilkCatPacks.phonePrompt(appSel, pk.main);
     PA('#apps-host [data-app-p]').forEach(function (b) { b.onclick = function () { appSel = b.getAttribute('data-app-p'); renderAppPrompts(); }; });
-    $('apps-save').onclick = function () { MilkCatPacks.setPhonePrompt(appSel, $('apps-ta').value); toast('已保存', 'ok', 2000); renderAppPrompts(); };
+    PA('#apps-host [data-app-pk]').forEach(function (b) { b.onclick = function () { appPack = b.getAttribute('data-app-pk'); renderAppPrompts(); }; });
+    $('apps-save').onclick = function () { MilkCatPacks.setPhonePrompt(appSel, $('apps-ta').value, appPack); toast('已保存', 'ok', 2000); renderAppPrompts(); };
     $('apps-reset').onclick = function () {
       if (!confirm('恢复成角色包默认的提示词？')) return;
-      MilkCatPacks.setPhonePrompt(appSel, null); renderAppPrompts();
+      MilkCatPacks.setPhonePrompt(appSel, null, appPack); renderAppPrompts();
     };
   }
 
@@ -5733,6 +5748,15 @@
     if (OPC.mode === 'custom') { startCustom(); return; }
     var list = $('opening-sel')._list || [];
     var pick = list[parseInt($('opening-sel').value, 10)] || null;
+    /* 同台开局（比如「天青 × 祈语」）要求特定的主角包 + 客串包：先换好包，再在新的开局列表里找回同一个开局 */
+    if (pick && pick.packs && packMode() && !MilkCatPacks.satisfies(pick.packs)) {
+      var cc0 = MilkCatPacks.choice(), want = pick.packs;
+      var extra0 = (want.extra || []).concat(cc0.extra).filter(function (id, i, a) { return id !== want.main && a.indexOf(id) === i; });
+      usePacks({ main: want.main, extra: extra0 });
+      noteAssets();
+      list = $('opening-sel')._list || [];
+      for (var oi = 0; oi < list.length; oi++) if (list[oi].id === pick.id) { $('opening-sel').value = String(oi); pick = list[oi]; break; }
+    }
     currentOpening = pick ? pick.n : null;
     runId = newRunId();          // 新周目，自动存档另开一个槽，不碰上一局
     activeNode = null;           // 新的一棵存档树

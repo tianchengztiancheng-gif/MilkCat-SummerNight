@@ -38,6 +38,18 @@
     }
   ];
 
+  /* 天青当客串时（主角是别的角色，比如祈语）：原版的「立绘」名单是主角专用的系统提示词，客串时不进卡，
+     这里单独给一条，让模型知道她有哪些表情。名单原样取自原版「立绘」条目 */
+  var SPR = (D.prompts || []).filter(function (p) { return p.comment === '立绘'; })[0];
+  var GUEST = [
+    {
+      uid: 'tq_guest', comment: '天青（客串）', constant: true, enabled: true,
+      position: 0, depth: 4, order: 207, key: [], keysecondary: [],
+      content: '【客串角色 · 天青】\n天青是准备出道的偶像 Larimar（设定见世界书「天青」）。她在场时说话写 <天青|表情|「台词」>。\n' +
+        (SPR ? SPR.content : '')
+    }
+  ];
+
   window.MilkCatPacks.register({
     id: 'tianqing',
     name: '天青',
@@ -68,6 +80,7 @@
     openings: D.openings,
     worldbook: D.worldbook,                          // 天青的角色设定（原样）
     prompts: D.prompts.concat(EXTRA),                // 原版系统提示词（换了前缀）+ 新增两条
+    guestPrompts: GUEST,                             // 当客串时：立绘名单
     phonePrompts: D.phonePrompts,                    // line / call / twitter / twitch / agency
     variables: D.variables,                          // 时间 / 地点 / 名气
     tags: D.tags,

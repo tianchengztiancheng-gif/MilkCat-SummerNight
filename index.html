@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>超级奶猫</title>
 <!-- 第一个脚本：localStorage 换成「mc:」前缀的包装，和同一个 github.io 下的 juus 版互不串（见 core/ns.js） -->
-<script src="core/ns.js?v=mc0.2"></script>
+<script src="core/ns.js?v=mc0.3"></script>
 <!-- 设备模式（电脑 / 手机竖屏 / 手机横屏）要在第一帧之前定下来，不然手机上会先闪一下电脑版。
      逻辑和 app.js 里的 applyDeviceClasses() 一致：localStorage 里选过就用选的，没选过按设备自动判断；横竖屏同理（gal_orient） -->
 <script>
@@ -34,17 +34,17 @@
 })();
 </script>
 <!-- ?v= 是防缓存：GitHub Pages 会缓存 10 分钟，更新时新旧文件混用会直接报错。每次发版改这个号 -->
-<link rel="stylesheet" href="app/style.css?v=mc0.2">
-<link rel="stylesheet" href="app/title.css?v=mc0.2">
+<link rel="stylesheet" href="app/style.css?v=mc0.3">
+<link rel="stylesheet" href="app/title.css?v=mc0.3">
 <!-- 标题画面的字体（和天青一样）。不阻塞渲染：国内连不上 Google Fonts 也不卡页面，只是退回系统字体 -->
 <link rel="stylesheet" media="print" onload="this.media='all'"
       href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Noto+Serif+SC:wght@700&family=ZCOOL+QingKe+HuangYou&display=swap">
 <!-- 顺序有意义：inner 打底 → 卡自带的皮（可选，会盖住 inner）→ phone.css 竖屏重排永远最后 -->
-<link rel="stylesheet" href="app/phone-inner.css?v=mc0.2">
-<link rel="stylesheet" href="app/phone.css?v=mc0.2">
-<link rel="stylesheet" href="app/editor-theme.css?v=mc0.2">
+<link rel="stylesheet" href="app/phone-inner.css?v=mc0.3">
+<link rel="stylesheet" href="app/phone.css?v=mc0.3">
+<link rel="stylesheet" href="app/editor-theme.css?v=mc0.3">
 <!-- 手机版式永远最后：只在 html.m-mobile 下生效，电脑模式一条都不碰 -->
-<link rel="stylesheet" href="app/mobile.css?v=mc0.2">
+<link rel="stylesheet" href="app/mobile.css?v=mc0.3">
 </head>
 <body>
 
@@ -551,36 +551,38 @@
   </div>
 </div>
 
-<script src="core/terms.js?v=mc0.2"></script>
+<script src="core/terms.js?v=mc0.3"></script>
 <!-- 必须是第一个脚本：它要能接住后面任何一个脚本的语法错误和初始化异常 -->
-<script src="core/crash.js?v=mc0.2"></script>
-<script src="core/cardres.js?v=mc0.2"></script>
-<script src="core/tokens.js?v=mc0.2"></script>
-<script src="core/vector.js?v=mc0.2"></script>
-<script src="core/imagegen.js?v=mc0.2"></script>
-<script src="core/snapshot.js?v=mc0.2"></script>
-<script src="core/gallery.js?v=mc0.2"></script>
-<script src="core/cg.js?v=mc0.2"></script>
-<script src="core/resolver.js?v=mc0.2"></script>
-<script src="core/worldbook.js?v=mc0.2"></script>
-<script src="core/regex.js?v=mc0.2"></script>
-<script src="core/prompt.js?v=mc0.2"></script>
-<script src="core/script.js?v=mc0.2"></script>
-<script src="core/phone.js?v=mc0.2"></script>
-<script src="core/memory.js?v=mc0.2"></script>
-<script src="core/milkcat.js?v=mc0.2"></script>
-<script src="core/engine.js?v=mc0.2"></script>
-<script src="core/api.js?v=mc0.2"></script>
-<script src="core/savetree.js?v=mc0.2"></script>
-<script src="core/imgnet.js?v=mc0.2"></script>
-<script src="core/opening.js?v=mc0.2"></script>
-<script src="core/storage.js?v=mc0.2"></script>
-<script src="core/editors.js?v=mc0.2"></script>
-<script src="core/customsprites.js?v=mc0.2"></script>
-<script src="core/packs.js?v=mc0.2"></script>
-<script src="packs/tianqing/data.js?v=mc0.2"></script>
-<script src="packs/tianqing/pack.js?v=mc0.2"></script>
-<script src="app/title.js?v=mc0.2"></script>
-<script src="app/app.js?v=mc0.2"></script>
+<script src="core/crash.js?v=mc0.3"></script>
+<script src="core/cardres.js?v=mc0.3"></script>
+<script src="core/tokens.js?v=mc0.3"></script>
+<script src="core/vector.js?v=mc0.3"></script>
+<script src="core/imagegen.js?v=mc0.3"></script>
+<script src="core/snapshot.js?v=mc0.3"></script>
+<script src="core/gallery.js?v=mc0.3"></script>
+<script src="core/cg.js?v=mc0.3"></script>
+<script src="core/resolver.js?v=mc0.3"></script>
+<script src="core/worldbook.js?v=mc0.3"></script>
+<script src="core/regex.js?v=mc0.3"></script>
+<script src="core/prompt.js?v=mc0.3"></script>
+<script src="core/script.js?v=mc0.3"></script>
+<script src="core/phone.js?v=mc0.3"></script>
+<script src="core/memory.js?v=mc0.3"></script>
+<script src="core/milkcat.js?v=mc0.3"></script>
+<script src="core/engine.js?v=mc0.3"></script>
+<script src="core/api.js?v=mc0.3"></script>
+<script src="core/savetree.js?v=mc0.3"></script>
+<script src="core/imgnet.js?v=mc0.3"></script>
+<script src="core/opening.js?v=mc0.3"></script>
+<script src="core/storage.js?v=mc0.3"></script>
+<script src="core/editors.js?v=mc0.3"></script>
+<script src="core/customsprites.js?v=mc0.3"></script>
+<script src="core/packs.js?v=mc0.3"></script>
+<script src="packs/tianqing/data.js?v=mc0.3"></script>
+<script src="packs/tianqing/pack.js?v=mc0.3"></script>
+<script src="packs/qiyu/data.js?v=mc0.3"></script>
+<script src="packs/qiyu/pack.js?v=mc0.3"></script>
+<script src="app/title.js?v=mc0.3"></script>
+<script src="app/app.js?v=mc0.3"></script>
 </body>
 </html>
